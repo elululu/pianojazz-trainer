@@ -1,10 +1,12 @@
 import { startTransition, useEffect, useRef, useState } from 'react'
-import { exercises } from './data/exercises'
+import { modernExercises as exercises } from './data/modernExercises'
 import { modeChallenges } from './data/modeChallenges'
 import { useMidi, type MidiNoteEvent } from './hooks/useMidi'
-import type { Exercise, ExerciseEvent, ExerciseLessonKind, ExerciseStep, ExerciseTrack, StepMatchMode } from './types'
+import type { Exercise, ExerciseEvent, ExerciseLessonKind, ExerciseStandardSection, ExerciseStep, ExerciseTrack, StepMatchMode } from './types'
 import {
+  createKeyboardLayout,
   KEYBOARD_LAYOUT,
+  TRAINING_RANGE,
   getChordSuggestions,
   getFreeHarmonyChordOptions,
   isNoteInPitchClassSet,
@@ -173,11 +175,45 @@ const compareExercises = (left: Exercise, right: Exercise) => {
 const getLessonKindLabel = (lessonKind: ExerciseLessonKind) => {
   switch (lessonKind) {
     case 'standard':
-      return 'Standard'
+      return 'Scene'
     case 'mini-piece':
-      return 'Mini-piece'
+      return 'Etude'
     default:
       return 'Concept'
+  }
+}
+
+const getCategoryLabel = (category: Exercise['category']) => {
+  switch (category) {
+    case 'color':
+      return 'Couleur'
+    case 'motif':
+      return 'Motif'
+    case 'pocket':
+      return 'Pocket'
+    case 'rhythm':
+      return 'Rythme'
+    case 'texture':
+      return 'Texture'
+    default:
+      return 'Voicings'
+  }
+}
+
+const getSceneSectionLabel = (section?: ExerciseStandardSection) => {
+  switch (section) {
+    case 'build':
+      return 'Montee'
+    case 'capsule':
+      return 'Capsule'
+    case 'loop':
+      return 'Loop'
+    case 'release':
+      return 'Retombee'
+    case 'scene':
+      return 'Scene'
+    default:
+      return 'Vamp'
   }
 }
 
@@ -366,13 +402,9 @@ export default function App() {
   const improvPrompt = isFreeHarmonyMode
     ? 'Joue les notes que tu veux main droite. Le labo lit la couleur de ta phrase et te propose les accords jazz les plus credibles main gauche.'
     : selectedChallenge.improvPrompt
-  const improvDescription = isFreeHarmonyMode
-    ? 'Aucune note interdite. Tu joues une cellule, puis l outil te renvoie une lecture harmonique exploitable tout de suite.'
-    : selectedChallenge.description
   const improvTargetColor = isFreeHarmonyMode
     ? 'Vise une cellule claire de 3 a 6 notes: je traduis ensuite cette couleur en voicing jazz main gauche.'
     : selectedChallenge.targetColor
-  const improvScaleLabel = isFreeHarmonyMode ? 'Toutes les notes sont acceptees' : selectedChallenge.scaleLabel
   const improvAllowedNotesLabel = isFreeHarmonyMode ? 'Toutes les notes' : selectedChallenge.noteNames.join(' · ')
   const improvKeyboardHint = isFreeHarmonyMode
     ? `Main droite au-dessus de ${toNoteName(improvSplitNote)} · analyse harmonique libre sans alerte de gamme`
@@ -500,6 +532,8 @@ export default function App() {
   const leftHandFingerMap = getLeftHandFingerMap(normalizedLeftHandVoicing)
   const improvRightHandPressedNotes = pressedNotes.filter((note) => note >= improvSplitNote)
   const improvLeftHandPressedNotes = pressedNotes.filter((note) => note < improvSplitNote)
+  const improvLeftHandLayout = createKeyboardLayout(36, Math.max(36, improvSplitNote - 1))
+  const improvRightHandLayout = createKeyboardLayout(improvSplitNote, TRAINING_RANGE.end)
   const chordVoicingLabel = toNoteNames(normalizedLeftHandVoicing).join(' · ')
   const matchedPitchClassLabel = activeChordSuggestion.matchedPitchClasses.length > 0
     ? activeChordSuggestion.matchedPitchClasses.map((pitchClass) => toPitchClassName(pitchClass)).join(' · ')
@@ -518,11 +552,11 @@ export default function App() {
   const activeModeLabel = practiceSurface === 'courses' ? lessonMode : improvLabMode
   const activeSurfaceLabel = practiceSurface === 'courses'
     ? courseWorkspaceMode === 'browser'
-      ? 'Parcours jazz'
-      : 'Cours au piano'
+      ? 'Parcours modern jazz'
+      : 'Session guidee'
     : isFreeHarmonyMode
-      ? 'Laboratoire harmonique libre'
-      : 'Laboratoire modal'
+      ? 'Color Lab libre'
+      : 'Color Lab modal'
   const activeCourseStepLabel = `${selectedExercise.phase} · Etape ${String(selectedExercise.order).padStart(2, '0')}`
   const isExerciseUnlocked = (exercise: Exercise) => {
     return (exercise.prerequisiteIds ?? []).every((exerciseId) => (progressStore[exerciseId]?.masteryRank ?? 0) >= 1)
@@ -679,7 +713,7 @@ export default function App() {
     } else if (practiceSurface === 'courses') {
       setLastInputLabel('Mode cours actif')
     } else {
-      setLastInputLabel(isFreeHarmonyMode ? 'Laboratoire harmonique libre actif' : 'Laboratoire modal actif')
+      setLastInputLabel(isFreeHarmonyMode ? 'Color Lab libre actif' : 'Color Lab modal actif')
     }
   }, [courseWorkspaceMode, isCourseBrowser, isFreeHarmonyMode, practiceSurface])
 
@@ -1106,13 +1140,16 @@ export default function App() {
     alertNote?: number | null
     fingerNumbers?: Map<number, number>
     frameClassName?: string
+    layout?: typeof KEYBOARD_LAYOUT
   }) => {
+    const layout = options.layout ?? KEYBOARD_LAYOUT
+
     return (
       <div className={`keyboard-frame ${options.frameClassName ?? ''}`.trim()}>
         <div className="keyboard" role="presentation">
-          {KEYBOARD_LAYOUT.keys.map((key) => {
-            const widthPercent = (key.widthUnits / KEYBOARD_LAYOUT.whiteKeyCount) * 100
-            const leftPercent = (key.leftUnits / KEYBOARD_LAYOUT.whiteKeyCount) * 100
+          {layout.keys.map((key) => {
+            const widthPercent = (key.widthUnits / layout.whiteKeyCount) * 100
+            const leftPercent = (key.leftUnits / layout.whiteKeyCount) * 100
             const isPressed = options.activeNotes.includes(key.note)
             const isTarget = options.targetNotes?.includes(key.note) ?? false
             const isUpcoming = options.upcomingNotes?.includes(key.note) ?? false
@@ -1165,7 +1202,7 @@ export default function App() {
           <p className="eyebrow">PianoJazz Trainer</p>
           <h1>Joue d abord. Lis seulement ce qui aide le prochain geste.</h1>
           <p className="hero-copy">
-            Parcours jazz structures, laboratoire modal et harmonique, et claviers faits pour guider l action sans noyer l ecran sous le texte.
+            Parcours modern jazz, scenes jouables, Color Lab modal et harmonique, et claviers penses pour le son, le geste et le groove.
           </p>
         </div>
 
@@ -1186,7 +1223,7 @@ export default function App() {
               className={`mode-button ${practiceSurface === 'improv-lab' ? 'is-active' : ''}`}
               onClick={() => setPracticeSurface('improv-lab')}
             >
-              Laboratoire
+              Color Lab
             </button>
           </div>
 
@@ -1211,10 +1248,10 @@ export default function App() {
         <main className="browser-shell">
           <section className="panel browser-hero">
             <div>
-              <p className="section-kicker">Choisir un parcours</p>
-              <h2>Travaille le jazz par phases: concept, application, puis jeu plus reel.</h2>
+              <p className="section-kicker">Modern Jazz Texture Lab</p>
+              <h2>Travaille par phases: pocket, couleur, motif, rythme puis texture de performance.</h2>
               <p className="lesson-mission">
-                Chaque phase melange comping, improvisation et standards. Tu peux suivre la recommendation du moment ou ouvrir une etape compagne pour lier harmonie et phrase.
+                Chaque phase melange comping, improvisation et scenes jouables. Suis la recommandation du moment ou ouvre une etape compagne pour relier voicings, motif et groove.
               </p>
               {nextRecommendedExercise ? (
                 <div className="browser-hero-callout">
@@ -1237,7 +1274,7 @@ export default function App() {
                 <strong>{courseProgress}%</strong>
               </div>
               <div className="status-card">
-                <span className="status-label">Laboratoire libre</span>
+                <span className="status-label">Color Lab libre</span>
                 <strong>{progressStore[FREE_HARMONY_LAB_ID]?.masteryLabel ?? 'A lancer'}</strong>
               </div>
             </div>
@@ -1258,7 +1295,7 @@ export default function App() {
                 </div>
 
                 <div className="phase-summary">
-                  <span className="exercise-support">Alterne concepts, standards et etudes pour faire le lien entre vocabulaire et vrai jeu.</span>
+                  <span className="exercise-support">Alterne concepts, scenes et etudes pour transformer un geste en vraie matiere musicale.</span>
                 </div>
 
                 <div className="browser-step-list">
@@ -1302,7 +1339,7 @@ export default function App() {
                         <div className="browser-step-meta">
                           <span className="exercise-focus">{exercise.handFocus}</span>
                           <span className="exercise-focus">{exercise.rangeLabel}</span>
-                          <span className="exercise-focus">{exercise.category}</span>
+                          <span className="exercise-focus">{getCategoryLabel(exercise.category)}</span>
                           <span className="exercise-focus">{exercise.feel ?? 'straight'}</span>
                         </div>
                         {prerequisiteTitles ? (
@@ -1324,7 +1361,7 @@ export default function App() {
           </section>
         </main>
       ) : isCoursePractice ? (
-        <main className="practice-shell">
+        <main className="practice-shell practice-shell--wide">
           <section className="panel stage-panel stage-panel--focus">
             <div className="practice-header">
               <div className="practice-header-main">
@@ -1353,9 +1390,9 @@ export default function App() {
                 <small>{selectedExercise.module}</small>
               </div>
               <div className="parcours-context-card">
-                <span className="status-label">Application</span>
-                <strong>{selectedExercise.standardTitle ?? 'Travail de concept'}</strong>
-                <small>{selectedExercise.standardSection ?? selectedExercise.nextUnlock}</small>
+                <span className="status-label">Scene cible</span>
+                <strong>{selectedExercise.standardTitle ?? 'Capsule de concept'}</strong>
+                <small>{selectedExercise.standardSection ? getSceneSectionLabel(selectedExercise.standardSection) : selectedExercise.nextUnlock}</small>
               </div>
               <div className="parcours-context-card">
                 <span className="status-label">Cours compagnons</span>
@@ -1538,50 +1575,14 @@ export default function App() {
             </div>
           </section>
 
-          <aside className="panel side-dock">
-            <div className="dock-card accent-amber">
-              <span className="coach-label">Focus</span>
-              <strong>{selectedExercise.listenFor}</strong>
-              <p>{selectedExercise.focus}</p>
-            </div>
-
-            <div className="dock-card accent-teal">
-              <span className="coach-label">Boucle courte</span>
-              <ul className="coach-list">
-                {selectedExercise.practiceLoop.slice(0, 2).map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="dock-card accent-slate">
-              <span className="coach-label">Memoire</span>
-              <strong>{savedModuleProgress?.masteryLabel ?? 'Nouveau module'}</strong>
-              <p>{selectedExercise.nextUnlock}</p>
-              <p className="coach-callout">Tempo memorise: {selectedExercise.tempo + (savedModuleProgress?.tempoBonus ?? 0)} BPM</p>
-            </div>
-
-            <div className="dock-card accent-slate">
-              <span className="coach-label">Entrees MIDI</span>
-              {midiState.inputs.length > 0 ? (
-                <ul className="input-list">
-                  {midiState.inputs.map((inputName) => (
-                    <li key={inputName}>{inputName}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Branche ton piano puis relance la session si rien n apparait.</p>
-              )}
-            </div>
-          </aside>
         </main>
       ) : (
-        <main className="practice-shell">
+        <main className="practice-shell practice-shell--wide">
           <section className="panel stage-panel stage-panel--focus">
             <div className="practice-header">
               <div className="practice-header-main">
                 <div>
-                  <p className="section-kicker">{isFreeHarmonyMode ? 'Laboratoire libre' : 'Laboratoire modal'}</p>
+                  <p className="section-kicker">{isFreeHarmonyMode ? 'Color Lab libre' : 'Color Lab modal'}</p>
                   <h2>{improvTitle}</h2>
                 </div>
               </div>
@@ -1601,7 +1602,7 @@ export default function App() {
                   className={`mode-button ${improvLabMode === 'modal-training' ? 'is-active' : ''}`}
                   onClick={() => setImprovLabMode('modal-training')}
                 >
-                  Mode surveille
+                  Mode guide
                 </button>
                 <button
                   type="button"
@@ -1609,6 +1610,12 @@ export default function App() {
                   onClick={() => setImprovLabMode('free-harmony')}
                 >
                   Mode libre harmonique
+                </button>
+              </div>
+
+              <div className="lesson-actions">
+                <button type="button" className="ghost-button" onClick={resetImprovSession}>
+                  Reinitialiser
                 </button>
               </div>
 
@@ -1663,20 +1670,7 @@ export default function App() {
             </div>
 
             <div className="keyboard-stage keyboard-stage--improv keyboard-stage--wide">
-              <div className="dual-keyboard-grid dual-keyboard-grid--wide">
-                <div className="keyboard-stack-panel">
-                  <div className="keyboard-hint keyboard-hint--subtle">
-                    <span className="expected-label">Main droite</span>
-                    <strong>{isFreeHarmonyMode ? 'Impro libre sans filtre modal' : `Impro dans ${selectedChallenge.modeName}`}</strong>
-                  </div>
-                  {renderKeyboard({
-                    activeNotes: improvRightHandPressedNotes,
-                    scalePitchClasses: isFreeHarmonyMode ? undefined : selectedChallenge.notePitchClasses,
-                    alertNote: isFreeHarmonyMode ? null : improvAlertNote,
-                    frameClassName: 'keyboard-frame--practice',
-                  })}
-                </div>
-
+              <div className="dual-keyboard-grid dual-keyboard-grid--wide dual-keyboard-grid--continuous">
                 <div className="keyboard-stack-panel">
                   <div className="keyboard-hint keyboard-hint--subtle keyboard-hint--left-hand">
                     <span className="expected-label">Main gauche</span>
@@ -1686,7 +1680,22 @@ export default function App() {
                     activeNotes: improvLeftHandPressedNotes,
                     targetNotes: normalizedLeftHandVoicing,
                     fingerNumbers: leftHandFingerMap,
-                    frameClassName: 'keyboard-frame--left-hand',
+                    frameClassName: 'keyboard-frame--left-hand keyboard-frame--split-left',
+                    layout: improvLeftHandLayout,
+                  })}
+                </div>
+
+                <div className="keyboard-stack-panel">
+                  <div className="keyboard-hint keyboard-hint--subtle keyboard-hint--right-hand">
+                    <span className="expected-label">Main droite</span>
+                    <strong>{isFreeHarmonyMode ? 'Impro libre sans filtre modal' : `Impro dans ${selectedChallenge.modeName}`}</strong>
+                  </div>
+                  {renderKeyboard({
+                    activeNotes: improvRightHandPressedNotes,
+                    scalePitchClasses: isFreeHarmonyMode ? undefined : selectedChallenge.notePitchClasses,
+                    alertNote: isFreeHarmonyMode ? null : improvAlertNote,
+                    frameClassName: 'keyboard-frame--practice keyboard-frame--split-right',
+                    layout: improvRightHandLayout,
                   })}
                 </div>
               </div>
@@ -1715,53 +1724,6 @@ export default function App() {
               </div>
             </div>
           </section>
-
-          <aside className="panel side-dock">
-            <div className="dock-card accent-teal">
-              <span className="coach-label">Accord principal</span>
-              <strong>{activeChordSuggestion.label}</strong>
-              <p>{activeChordSuggestion.reason}</p>
-            </div>
-
-            {freeHarmonyAlternatives.length > 0 && (
-              <div className="dock-card accent-slate">
-                <span className="coach-label">Alternatives proches</span>
-                <div className="alt-chord-list">
-                  {freeHarmonyAlternatives.map((option) => (
-                    <div key={option.label} className="alt-chord-item">
-                      <strong>{option.label}</strong>
-                      <span>{toNoteNames(option.leftHandVoicing).join(' · ')}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="dock-card accent-amber">
-              <span className="coach-label">Cadre</span>
-              <strong>{improvScaleLabel}</strong>
-              <p>{improvDescription}</p>
-            </div>
-
-            <div className="dock-card accent-slate">
-              <span className="coach-label">Entrees MIDI</span>
-              {midiState.inputs.length > 0 ? (
-                <ul className="input-list">
-                  {midiState.inputs.map((inputName) => (
-                    <li key={inputName}>{inputName}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Branche ton piano puis relance si aucune entree n apparait.</p>
-              )}
-            </div>
-
-            <div className="dock-actions">
-              <button type="button" className="ghost-button" onClick={resetImprovSession}>
-                Reinitialiser
-              </button>
-            </div>
-          </aside>
         </main>
       )}
     </div>
