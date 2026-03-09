@@ -968,6 +968,33 @@ h2 {
   opacity: 0.35;
 }
 
+.roll-beat-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid rgba(123, 201, 220, 0.18);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.roll-beat-guide.is-bar {
+  border-top-color: rgba(248, 213, 154, 0.38);
+}
+
+.roll-beat-guide__label {
+  position: absolute;
+  right: 14px;
+  top: -10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(7, 12, 19, 0.72);
+  color: rgba(245, 231, 199, 0.72);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 .strike-line {
   position: absolute;
   left: 0;
@@ -1006,8 +1033,10 @@ h2 {
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  transition: opacity 180ms ease, transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+  transition: background 140ms ease, box-shadow 140ms ease, filter 160ms ease;
   transform-origin: center bottom;
+  will-change: bottom, transform, opacity;
+  backface-visibility: hidden;
   z-index: 4;
 }
 
@@ -1022,10 +1051,9 @@ h2 {
 }
 
 .roll-note.is-played {
-  opacity: 0.34;
-  transform: scale(0.96) translateY(8px);
   background: linear-gradient(180deg, #d8dee9, #7a869b);
   box-shadow: none;
+  filter: saturate(0.35);
 }
 
 .roll-note.is-white-lane {
@@ -1037,6 +1065,11 @@ h2 {
   z-index: 5;
   border-bottom-left-radius: 8px;
   border-bottom-right-radius: 8px;
+}
+
+.roll-note span {
+  pointer-events: none;
+  user-select: none;
 }
 
 .keyboard-frame {

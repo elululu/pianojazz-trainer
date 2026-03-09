@@ -2,6 +2,8 @@ node_modules
 dist
 dist-electron
 release
+.npm-cache
+assets/icon.iconset
 .DS_Store
 *.log
 *.tsbuildinfo

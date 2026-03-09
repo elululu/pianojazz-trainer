@@ -15,10 +15,14 @@ import {
 
 const VISIBLE_HISTORY = 1
 const VISIBLE_STEPS = 5
-const ROLL_STEP_GAP = 19
+const ROLL_STEP_GAP = 14
 const ROLL_TARGET_BOTTOM = -4
 const ROLL_LEAD_IN = 18
 const ROLL_RELEASE_TRAVEL = 14
+const ROLL_NOTE_HEIGHT_PER_BEAT = 11
+const ROLL_ENTRY_FADE_WINDOW = 10
+const ROLL_ENTRY_LIFT_PX = 18
+const ROLL_TARGET_FLOAT_PX = 4
 const MAX_RESUMED_SCROLL_PROGRESS = 0.58
 const CALL_RESPONSE_LENGTH = 3
 const PROMPT_NOTE_RELEASE_MS = 90
@@ -52,6 +56,26 @@ const sortedNotes = (notes: Iterable<number>) => {
   return [...notes].sort((left, right) => left - right)
 }
 
+const clamp01 = (value: number) => {
+  return Math.max(0, Math.min(value, 1))
+}
+
+const easeOutCubic = (value: number) => {
+  const clamped = clamp01(value)
+
+  return 1 - (1 - clamped) ** 3
+}
+
+const easeInOutCubic = (value: number) => {
+  const clamped = clamp01(value)
+
+  if (clamped < 0.5) {
+    return 4 * clamped ** 3
+  }
+
+  return 1 - ((-2 * clamped + 2) ** 3) / 2
+}
+
 const getLoopedStep = <T,>(items: T[], index: number) => {
   if (items.length === 0) {
     return undefined
@@ -64,6 +88,22 @@ const getLoopedStep = <T,>(items: T[], index: number) => {
 
 const noteSetMatches = (pressedNotes: Set<number>, expectedNotes: number[]) => {
   return pressedNotes.size === expectedNotes.length && expectedNotes.every((note) => pressedNotes.has(note))
+}
+
+const getBeatOffsetToStep = (steps: Array<{ beatSpan: number }>, currentIndex: number, stepIndex: number) => {
+  if (stepIndex === currentIndex) {
+    return 0
+  }
+
+  if (stepIndex > currentIndex) {
+    return steps.slice(currentIndex, stepIndex).reduce((total, step) => total + step.beatSpan, 0)
+  }
+
+  return -steps.slice(stepIndex, currentIndex).reduce((total, step) => total + step.beatSpan, 0)
+}
+
+const getCumulativeBeatOffset = (steps: Array<{ beatSpan: number }>, endIndex: number) => {
+  return steps.slice(0, endIndex).reduce((total, step) => total + step.beatSpan, 0)
 }
 
 const getMasteryState = (noteOnCount: number, completedRuns: number, accuracy: number, mistakes: number) => {
@@ -262,12 +302,32 @@ export default function App() {
   const adaptiveTempo = selectedExercise.tempo + tempoBonus
   const { previewMs: stepPreviewMs, advanceMs: stepAdvanceMs, promptStepMs } = getTimingFromTempo(adaptiveTempo)
   const previewNow = advanceStartedAt ?? now
-  const scrollProgress = Math.min((previewNow - stepActivatedAtRef.current) / stepPreviewMs, 1)
-  const advanceProgress = advanceStartedAt === null ? 0 : Math.min((now - advanceStartedAt) / stepAdvanceMs, 1)
-  const queueLeadInOffset = (1 - scrollProgress) * ROLL_LEAD_IN
+  const rawScrollProgress = clamp01((previewNow - stepActivatedAtRef.current) / stepPreviewMs)
+  const scrollProgress = easeOutCubic(rawScrollProgress)
+  const rawAdvanceProgress = advanceStartedAt === null ? 0 : clamp01((now - advanceStartedAt) / stepAdvanceMs)
+  const advanceProgress = easeInOutCubic(rawAdvanceProgress)
+  const queueLeadInOffset = (1 - scrollProgress) ** 2 * ROLL_LEAD_IN
+  const currentStepBeatSpan = selectedExercise.steps[currentStepIndex]?.beatSpan ?? 1
+  const advancedBeatOffset = advanceProgress * currentStepBeatSpan
   const visibleStartIndex = Math.max(0, currentStepIndex - VISIBLE_HISTORY)
-  const visibleEndIndex = Math.min(selectedExercise.steps.length, currentStepIndex + VISIBLE_STEPS + 1)
+  const visibleEndIndex = Math.min(selectedExercise.steps.length, currentStepIndex + VISIBLE_STEPS + 2)
   const visibleSteps = selectedExercise.steps.slice(visibleStartIndex, visibleEndIndex)
+  const currentBeatCursor = getCumulativeBeatOffset(selectedExercise.steps, currentStepIndex) + advancedBeatOffset
+  const visibleBeatCeiling = selectedExercise.steps
+    .slice(currentStepIndex, visibleEndIndex)
+    .reduce((total, step) => total + step.beatSpan, 0)
+  const rollBeatMarkers = Array.from({ length: Math.max(0, Math.ceil(visibleBeatCeiling) + 2) }, (_, index) => {
+    const beatOffset = index - advancedBeatOffset
+    const absoluteBeat = Math.floor(currentBeatCursor) + index
+
+    return {
+      id: `beat-${absoluteBeat}-${index}`,
+      beatOffset,
+      absoluteBeat,
+      label: (absoluteBeat % 4) + 1,
+      isBar: absoluteBeat % 4 === 0,
+    }
+  })
   const promptSteps = promptStepIndices.map((stepIndex) => selectedExercise.steps[stepIndex]).filter(Boolean)
   const activePromptStep = activePromptPosition === null ? undefined : promptSteps[activePromptPosition]
   const responseStep = promptSteps[responseStepCursor]
@@ -492,10 +552,26 @@ export default function App() {
   }, [courseWorkspaceMode, isCourseBrowser, isFreeHarmonyMode, practiceSurface])
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setNow(Date.now())
-    }, 33)
+    if (!isCoursePractice) {
+      return
+    }
 
+    let animationFrameId = 0
+
+    const updateFrame = () => {
+      setNow(Date.now())
+      animationFrameId = window.requestAnimationFrame(updateFrame)
+    }
+
+    setNow(Date.now())
+    animationFrameId = window.requestAnimationFrame(updateFrame)
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId)
+    }
+  }, [isCoursePractice])
+
+  useEffect(() => {
     return () => {
       if (advanceTimeoutRef.current !== null) {
         window.clearTimeout(advanceTimeoutRef.current)
@@ -504,7 +580,6 @@ export default function App() {
       clearPromptPlayback()
       clearAlertFlash()
       audioContextRef.current?.close().catch(() => undefined)
-      window.clearInterval(intervalId)
     }
   }, [])
 
@@ -619,7 +694,7 @@ export default function App() {
       return
     }
 
-    const frozenScrollProgress = scrollProgress
+    const frozenScrollProgress = rawScrollProgress
 
     isAdvancingRef.current = true
     setAdvanceStartedAt(Date.now())
@@ -1141,14 +1216,34 @@ export default function App() {
               <div className="keyboard-stage keyboard-stage--course">
                 <div className="piano-roll">
                   <div className="roll-grid" />
+                  {rollBeatMarkers.map((marker) => {
+                    const bottom = ROLL_TARGET_BOTTOM + marker.beatOffset * ROLL_STEP_GAP + queueLeadInOffset
+                    const opacity = marker.beatOffset < 0
+                      ? 0.12
+                      : 0.18 + (1 - clamp01(marker.beatOffset / 10)) * 0.38
+
+                    return (
+                      <div
+                        key={marker.id}
+                        className={`roll-beat-guide ${marker.isBar ? 'is-bar' : ''}`}
+                        style={{
+                          bottom: `${bottom}%`,
+                          opacity,
+                        }}
+                      >
+                        <span className="roll-beat-guide__label">{marker.label}</span>
+                      </div>
+                    )
+                  })}
                   <div className="strike-line">
                     <span>Impact clavier</span>
                   </div>
 
                   {visibleSteps.map((step, stepOffset) => {
                     const stepIndex = visibleStartIndex + stepOffset
-                    const relativeIndex = stepIndex - currentStepIndex - advanceProgress
-                    const height = Math.max(12, step.beatSpan * 12)
+                    const beatOffset = getBeatOffsetToStep(selectedExercise.steps, currentStepIndex, stepIndex) - advancedBeatOffset
+                    const noteSpan = Math.max(step.beatSpan, 1)
+                    const height = Math.max(12, noteSpan * ROLL_NOTE_HEIGHT_PER_BEAT)
 
                     return step.notes.map((note) => {
                       const keyLayout = KEYBOARD_LAYOUT.noteLookup.get(note)
@@ -1162,14 +1257,28 @@ export default function App() {
                       const laneInset = keyLayout.isBlack ? 0.08 : 0.14
                       const noteWidthPercent = keyWidthPercent * (1 - laneInset * 2)
                       const noteLeftPercent = keyLeftPercent + keyWidthPercent * laneInset
-                      const visualState = relativeIndex < 0
+                      const leadDistance = Math.max(0, beatOffset)
+                      const passedDistance = Math.max(0, -beatOffset)
+                      const passedProgress = clamp01(passedDistance / noteSpan)
+                      const entryProgress = 1 - clamp01(leadDistance / ROLL_ENTRY_FADE_WINDOW)
+                      const targetProximity = 1 - clamp01(Math.abs(beatOffset) / noteSpan)
+                      const visualState = beatOffset < -0.12
                         ? 'is-played'
-                        : relativeIndex === 0
+                        : beatOffset < Math.max(0.72, noteSpan * 0.45)
                           ? 'is-target'
                           : 'is-queued'
-                      const bottom = relativeIndex < 0
-                        ? ROLL_TARGET_BOTTOM - ROLL_RELEASE_TRAVEL - scrollProgress * 6
-                        : ROLL_TARGET_BOTTOM + relativeIndex * ROLL_STEP_GAP + queueLeadInOffset
+                      const bottom = beatOffset < 0
+                        ? ROLL_TARGET_BOTTOM - easeOutCubic(passedProgress) * ROLL_RELEASE_TRAVEL - (1 - targetProximity) * 2
+                        : ROLL_TARGET_BOTTOM + beatOffset * ROLL_STEP_GAP + queueLeadInOffset
+                      const opacity = beatOffset < 0
+                        ? 0.14 + (1 - passedProgress) * 0.28
+                        : 0.24 + entryProgress * 0.76
+                      const translateY = beatOffset < 0
+                        ? easeOutCubic(passedProgress) * 10
+                        : (1 - entryProgress) * -ROLL_ENTRY_LIFT_PX - targetProximity * ROLL_TARGET_FLOAT_PX
+                      const scale = beatOffset < 0
+                        ? 0.94 + (1 - passedProgress) * 0.04
+                        : 0.92 + entryProgress * 0.08 + targetProximity * 0.02
 
                       return (
                         <div
@@ -1180,6 +1289,8 @@ export default function App() {
                             width: `${noteWidthPercent}%`,
                             bottom: `${bottom}%`,
                             height: `${height}%`,
+                            opacity,
+                            transform: `translate3d(0, ${translateY}px, 0) scale(${Math.min(scale, 1.02)})`,
                           }}
                         >
                           <span>{toNoteName(note)}</span>

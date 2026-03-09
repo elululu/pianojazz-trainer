@@ -18,12 +18,14 @@
     "directories": {
       "buildResources": "assets"
     },
+    "icon": "assets/icon.png",
     "files": [
       "dist/**/*",
       "electron/**/*",
       "package.json"
     ],
     "mac": {
+      "icon": "assets/icon.icns",
       "category": "public.app-category.music",
       "target": [
         "dmg",
