@@ -2,7 +2,7 @@ import { startTransition, useEffect, useRef, useState } from 'react'
 import { exercises } from './data/exercises'
 import { modeChallenges } from './data/modeChallenges'
 import { useMidi, type MidiNoteEvent } from './hooks/useMidi'
-import type { Exercise, ExerciseLessonKind, ExerciseTrack } from './types'
+import type { Exercise, ExerciseEvent, ExerciseLessonKind, ExerciseStep, ExerciseTrack, StepMatchMode } from './types'
 import {
   KEYBOARD_LAYOUT,
   getChordSuggestions,
@@ -89,6 +89,65 @@ const getLoopedStep = <T,>(items: T[], index: number) => {
 
 const noteSetMatches = (pressedNotes: Set<number>, expectedNotes: number[]) => {
   return pressedNotes.size === expectedNotes.length && expectedNotes.every((note) => pressedNotes.has(note))
+}
+
+const getStepEvents = (step?: ExerciseStep): ExerciseEvent[] => {
+  if (!step) {
+    return []
+  }
+
+  if (step.events && step.events.length > 0) {
+    return step.events
+  }
+
+  return [{
+    notes: step.notes,
+    hand: step.hand ?? 'both',
+    offsetBeats: step.offsetBeats ?? 0,
+    durationBeats: step.durationBeats ?? step.beatSpan,
+    label: step.label,
+    matchMode: step.matchMode,
+  }]
+}
+
+const getStepExpectedNotes = (step?: ExerciseStep) => {
+  return sortedNotes(new Set(getStepEvents(step).flatMap((event) => event.notes)))
+}
+
+const getStepMatchMode = (step?: ExerciseStep): StepMatchMode => {
+  if (!step) {
+    return 'exact'
+  }
+
+  if (step.matchMode) {
+    return step.matchMode
+  }
+
+  const stepEvents = getStepEvents(step)
+
+  if (stepEvents.length > 1) {
+    return 'contains'
+  }
+
+  return stepEvents[0]?.matchMode ?? 'exact'
+}
+
+const isStepNoteExpected = (step: ExerciseStep | undefined, note: number) => {
+  return getStepExpectedNotes(step).includes(note)
+}
+
+const doesStepMatch = (pressedNotes: Set<number>, step?: ExerciseStep) => {
+  if (!step) {
+    return false
+  }
+
+  const expectedNotes = getStepExpectedNotes(step)
+
+  if (getStepMatchMode(step) === 'contains') {
+    return expectedNotes.every((note) => pressedNotes.has(note))
+  }
+
+  return noteSetMatches(pressedNotes, expectedNotes)
 }
 
 const getBeatOffsetToStep = (steps: Array<{ beatSpan: number }>, currentIndex: number, stepIndex: number) => {
@@ -287,6 +346,7 @@ export default function App() {
   const alertTimeoutRef = useRef<number | null>(null)
   const lastAlertAtRef = useRef(0)
   const audioContextRef = useRef<AudioContext | null>(null)
+  const demoNotesRef = useRef(new Set<number>())
   const isAdvancingRef = useRef(false)
   const [stableChordLabel, setStableChordLabel] = useState<string | null>(null)
 
@@ -376,9 +436,19 @@ export default function App() {
       ? promptSteps[(activePromptPosition ?? 0) + 1]
       : promptSteps[responseStepCursor + 1]
     : anticipatedGuidedUpcomingStep
-  const expectedNotes = displayedStep?.notes ?? []
+  const expectedNotes = getStepExpectedNotes(displayedStep)
+  const upcomingNotes = getStepExpectedNotes(displayedNextStep)
   const courseDisplayedPressedNotes = sortedNotes(new Set([...pressedNotes, ...demoNotes]))
-  const targetLabel = expectedNotes.length > 0 ? expectedNotes.map((note) => toNoteName(note)).join(' + ') : 'En attente'
+  const targetLabel = displayedStep
+    ? getStepEvents(displayedStep)
+        .map((event) => {
+          const handLabel = event.hand === 'left' ? 'MG' : event.hand === 'right' ? 'MD' : '2M'
+          const notesLabel = event.label ?? event.notes.map((note) => toNoteName(note)).join(' + ')
+
+          return `${handLabel}: ${notesLabel}`
+        })
+        .join(' · ')
+    : 'En attente'
   const contextLabel = displayedStep?.chord ?? displayedStep?.label ?? 'Repere en cours'
   const actionLabel = lessonMode === 'call-response'
     ? callResponseState === 'playing'
@@ -489,8 +559,24 @@ export default function App() {
   const clearPromptPlayback = () => {
     promptTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
     promptTimeoutsRef.current = []
+    demoNotesRef.current = new Set<number>()
     setDemoNotes([])
     setActivePromptPosition(null)
+  }
+
+  const updateDemoNotes = (notes: number[], isActive: boolean) => {
+    const nextDemoNotes = new Set(demoNotesRef.current)
+
+    notes.forEach((note) => {
+      if (isActive) {
+        nextDemoNotes.add(note)
+      } else {
+        nextDemoNotes.delete(note)
+      }
+    })
+
+    demoNotesRef.current = nextDemoNotes
+    setDemoNotes(sortedNotes(nextDemoNotes))
   }
 
   const clearAlertFlash = () => {
@@ -787,27 +873,37 @@ export default function App() {
     indices.forEach((stepIndex, position) => {
       const step = selectedExercise.steps[stepIndex]
       const durationMs = Math.max(180, Math.round(promptStepMs * step.beatSpan))
-      const releaseMs = Math.min(PROMPT_NOTE_RELEASE_MS, Math.max(70, durationMs - 40))
-      const showTimeoutId = window.setTimeout(() => {
+      const showStepTimeoutId = window.setTimeout(() => {
         setActivePromptPosition(position)
-        setDemoNotes(step.notes)
       }, elapsedMs)
-      const hideTimeoutId = window.setTimeout(() => {
-        setDemoNotes([])
-      }, elapsedMs + durationMs - releaseMs)
 
-      promptTimeoutsRef.current.push(showTimeoutId, hideTimeoutId)
+      promptTimeoutsRef.current.push(showStepTimeoutId)
 
-      if (audioContext) {
-        step.notes.forEach((note) => {
-          schedulePromptNote(audioContext, note, startAt + elapsedMs / 1000, durationMs - 20)
-        })
-      }
+      getStepEvents(step).forEach((stepEvent) => {
+        const eventDurationMs = Math.max(120, Math.round(promptStepMs * stepEvent.durationBeats))
+        const releaseMs = Math.min(PROMPT_NOTE_RELEASE_MS, Math.max(70, eventDurationMs - 40))
+        const eventStartMs = elapsedMs + Math.round(promptStepMs * stepEvent.offsetBeats)
+        const showTimeoutId = window.setTimeout(() => {
+          updateDemoNotes(stepEvent.notes, true)
+        }, eventStartMs)
+        const hideTimeoutId = window.setTimeout(() => {
+          updateDemoNotes(stepEvent.notes, false)
+        }, eventStartMs + eventDurationMs - releaseMs)
+
+        promptTimeoutsRef.current.push(showTimeoutId, hideTimeoutId)
+
+        if (audioContext) {
+          stepEvent.notes.forEach((note) => {
+            schedulePromptNote(audioContext, note, startAt + eventStartMs / 1000, eventDurationMs - 20)
+          })
+        }
+      })
 
       elapsedMs += durationMs
     })
 
     const finishTimeoutId = window.setTimeout(() => {
+      demoNotesRef.current = new Set<number>()
       setDemoNotes([])
       setActivePromptPosition(null)
       setResponseStepCursor(0)
@@ -827,12 +923,12 @@ export default function App() {
 
     setNoteOnCount((value) => value + 1)
 
-    if (!currentStep.notes.includes(event.note)) {
+    if (!isStepNoteExpected(currentStep, event.note)) {
       setMistakes((value) => value + 1)
       return
     }
 
-    const stepMatched = noteSetMatches(nextPressed, currentStep.notes)
+    const stepMatched = doesStepMatch(nextPressed, currentStep)
 
     if (stepMatched) {
       advanceExercise()
@@ -852,7 +948,7 @@ export default function App() {
 
     setNoteOnCount((value) => value + 1)
 
-    if (!targetStep.notes.includes(event.note)) {
+    if (!isStepNoteExpected(targetStep, event.note)) {
       setMistakes((value) => value + 1)
       setResponseStepCursor(0)
       setCallResponseState('idle')
@@ -860,7 +956,7 @@ export default function App() {
       return
     }
 
-    const stepMatched = noteSetMatches(nextPressed, targetStep.notes)
+    const stepMatched = doesStepMatch(nextPressed, targetStep)
 
     if (!stepMatched) {
       return
@@ -1347,11 +1443,14 @@ export default function App() {
 
                   {visibleSteps.map((step, stepOffset) => {
                     const stepIndex = visibleStartIndex + stepOffset
-                    const beatOffset = getBeatOffsetToStep(selectedExercise.steps, currentStepIndex, stepIndex) - advancedBeatOffset
-                    const noteSpan = Math.max(step.beatSpan, 1)
-                    const height = Math.max(12, noteSpan * ROLL_NOTE_HEIGHT_PER_BEAT)
+                    const stepBeatOffset = getBeatOffsetToStep(selectedExercise.steps, currentStepIndex, stepIndex) - advancedBeatOffset
 
-                    return step.notes.map((note) => {
+                    return getStepEvents(step).flatMap((stepEvent, eventIndex) => {
+                      const beatOffset = stepBeatOffset + stepEvent.offsetBeats
+                      const noteSpan = Math.max(stepEvent.durationBeats, 1)
+                      const height = Math.max(12, noteSpan * ROLL_NOTE_HEIGHT_PER_BEAT)
+
+                      return stepEvent.notes.map((note) => {
                       const keyLayout = KEYBOARD_LAYOUT.noteLookup.get(note)
 
                       if (!keyLayout) {
@@ -1388,8 +1487,8 @@ export default function App() {
 
                       return (
                         <div
-                          key={`${step.id}-${note}`}
-                          className={`roll-note ${visualState} ${keyLayout.isBlack ? 'is-black-lane' : 'is-white-lane'}`}
+                          key={`${step.id}-${eventIndex}-${note}`}
+                          className={`roll-note ${visualState} ${keyLayout.isBlack ? 'is-black-lane' : 'is-white-lane'} hand-${stepEvent.hand}`}
                           style={{
                             left: `${noteLeftPercent}%`,
                             width: `${noteWidthPercent}%`,
@@ -1403,13 +1502,14 @@ export default function App() {
                         </div>
                       )
                     })
+                    })
                   })}
                 </div>
 
                 {renderKeyboard({
                   activeNotes: courseDisplayedPressedNotes,
                   targetNotes: expectedNotes,
-                  upcomingNotes: displayedNextStep?.notes ?? [],
+                  upcomingNotes,
                 })}
               </div>
 

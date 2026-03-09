@@ -1126,6 +1126,18 @@ h2 {
   filter: saturate(0.35);
 }
 
+.roll-note.hand-left {
+  outline: 1px solid rgba(245, 213, 167, 0.26);
+}
+
+.roll-note.hand-right {
+  outline: 1px solid rgba(114, 223, 207, 0.24);
+}
+
+.roll-note.hand-both {
+  outline: 1px solid rgba(255, 255, 255, 0.18);
+}
+
 .roll-note.is-white-lane {
   border-bottom-left-radius: 10px;
   border-bottom-right-radius: 10px;

@@ -9,6 +9,15 @@ export type RhythmFeel = 'straight' | 'swing'
 export type StepHand = 'left' | 'right' | 'both'
 export type StepMatchMode = 'exact' | 'contains'
 
+export type ExerciseEvent = {
+  notes: number[]
+  hand: StepHand
+  offsetBeats: number
+  durationBeats: number
+  label?: string
+  matchMode?: StepMatchMode
+}
+
 export type ExerciseStep = {
   id: string
   notes: number[]
@@ -20,6 +29,7 @@ export type ExerciseStep = {
   matchMode?: StepMatchMode
   durationBeats?: number
   offsetBeats?: number
+  events?: ExerciseEvent[]
 }
 
 export type Exercise = {
