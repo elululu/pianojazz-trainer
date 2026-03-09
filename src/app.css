@@ -1,0 +1,550 @@
+:root {
+  color-scheme: dark;
+  font-family: 'Avenir Next', 'Segoe UI Variable Display', 'Trebuchet MS', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #f4efe7;
+  background:
+    radial-gradient(circle at top left, rgba(204, 127, 35, 0.24), transparent 34%),
+    radial-gradient(circle at top right, rgba(39, 153, 151, 0.2), transparent 28%),
+    linear-gradient(180deg, #0c1018 0%, #090b12 45%, #111826 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+}
+
+strong,
+h1,
+h2 {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', serif;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 28px;
+}
+
+.panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background: rgba(9, 12, 20, 0.74);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px);
+}
+
+.hero-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.85fr);
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 28px;
+}
+
+.eyebrow,
+.section-kicker,
+.status-label,
+.expected-label,
+.coach-label {
+  margin: 0 0 8px;
+  color: #e2b16f;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+}
+
+.hero-panel h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 5vw, 4.5rem);
+  line-height: 0.96;
+}
+
+.hero-copy {
+  max-width: 72ch;
+  margin: 18px 0 0;
+  color: #c6cedd;
+  font-size: 1.02rem;
+}
+
+.hero-status {
+  display: grid;
+  gap: 14px;
+}
+
+.status-card,
+.metric-card,
+.coach-card,
+.exercise-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.status-card {
+  padding: 18px 20px;
+}
+
+.status-card strong {
+  display: block;
+  font-size: 1.02rem;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 320px;
+  gap: 24px;
+}
+
+.exercise-panel,
+.stage-panel,
+.coach-panel {
+  padding: 24px;
+}
+
+.section-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.section-head-tight {
+  margin-bottom: 14px;
+}
+
+.section-head h2,
+.exercise-card strong,
+.metric-card strong,
+.coach-card strong {
+  margin: 0;
+}
+
+.ghost-button {
+  cursor: pointer;
+  padding: 12px 16px;
+  border-radius: 999px;
+  color: #f5e6cf;
+  background: rgba(226, 177, 111, 0.12);
+  border: 1px solid rgba(226, 177, 111, 0.34);
+}
+
+.exercise-list {
+  display: grid;
+  gap: 14px;
+}
+
+.exercise-card {
+  cursor: pointer;
+  padding: 18px;
+  text-align: left;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.exercise-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(226, 177, 111, 0.44);
+}
+
+.exercise-card.is-active {
+  background: linear-gradient(180deg, rgba(226, 177, 111, 0.14), rgba(31, 36, 52, 0.82));
+  border-color: rgba(226, 177, 111, 0.52);
+}
+
+.exercise-card-top,
+.inline-pills,
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.exercise-card p,
+.coach-card p {
+  margin: 10px 0 0;
+  color: #b4bfd4;
+}
+
+.exercise-focus,
+.tempo,
+.tag,
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tag,
+.pill {
+  color: #f2d5a7;
+  background: rgba(226, 177, 111, 0.12);
+}
+
+.tempo {
+  color: #8cdfd1;
+  background: rgba(74, 183, 180, 0.12);
+}
+
+.stats-row {
+  margin-bottom: 18px;
+}
+
+.metric-card {
+  flex: 1 1 160px;
+  padding: 18px;
+}
+
+.metric-card span,
+.metric-card small {
+  display: block;
+}
+
+.metric-card span,
+.metric-card small,
+.exercise-focus {
+  color: #94a0b5;
+}
+
+.metric-card strong {
+  display: block;
+  margin: 8px 0 6px;
+  font-size: 1.8rem;
+}
+
+.trainer-surface {
+  display: grid;
+  gap: 16px;
+}
+
+.keyboard-stage {
+  position: relative;
+  display: grid;
+  gap: 0;
+  padding-inline: 16px;
+}
+
+.piano-roll {
+  position: relative;
+  min-height: 460px;
+  overflow: visible;
+  margin-bottom: -20px;
+  border-radius: 26px 26px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 0,
+      rgba(255, 255, 255, 0.04) calc(100% / 22),
+      transparent calc(100% / 22),
+      transparent calc(100% / 11)
+    ),
+    linear-gradient(180deg, rgba(19, 27, 39, 0.96), rgba(10, 13, 21, 0.96));
+  z-index: 3;
+}
+
+.roll-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 100% 14%, calc(100% / 22) 100%;
+  opacity: 0.35;
+}
+
+.strike-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f9d59a;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.strike-line::before {
+  content: '';
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(74, 183, 180, 0.18), rgba(226, 177, 111, 0.94));
+  box-shadow: 0 0 18px rgba(226, 177, 111, 0.4);
+}
+
+.strike-line span {
+  margin-right: 18px;
+}
+
+.roll-note {
+  position: absolute;
+  border-radius: 18px;
+  display: flex;
+  align-items: start;
+  justify-content: center;
+  padding-top: 10px;
+  color: #081117;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  transition: bottom 220ms ease, opacity 220ms ease, transform 220ms ease;
+  transform-origin: center bottom;
+  z-index: 4;
+}
+
+.roll-note.is-target {
+  background: linear-gradient(180deg, #ffd48d, #f09d36);
+  box-shadow: 0 16px 28px rgba(240, 157, 54, 0.26);
+}
+
+.roll-note.is-queued {
+  background: linear-gradient(180deg, #72dfcf, #329ea1);
+  box-shadow: 0 16px 28px rgba(50, 158, 161, 0.22);
+}
+
+.roll-note.is-played {
+  opacity: 0.34;
+  transform: scale(0.96) translateY(8px);
+  background: linear-gradient(180deg, #d8dee9, #7a869b);
+  box-shadow: none;
+}
+
+.roll-note.is-white-lane {
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+.roll-note.is-black-lane {
+  z-index: 5;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.keyboard-frame {
+  position: relative;
+  z-index: 2;
+  border-radius: 0 0 26px 26px;
+  padding: 22px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.expected-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.expected-bar strong {
+  display: block;
+  color: #fff1d8;
+}
+
+.keyboard {
+  position: relative;
+  height: 230px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(7, 10, 16, 0.94), rgba(3, 5, 9, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.piano-key {
+  position: absolute;
+  bottom: 0;
+  cursor: pointer;
+  transition: transform 100ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.piano-key span {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+.piano-key--white {
+  height: 100%;
+  border-right: 1px solid rgba(5, 8, 14, 0.18);
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(180deg, #fff9ef 0%, #e3d2ba 74%, #b59f86 100%);
+  color: #503c25;
+}
+
+.piano-key--white span {
+  bottom: 12px;
+}
+
+.piano-key--black {
+  z-index: 2;
+  top: 0;
+  bottom: auto;
+  height: 62%;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(180deg, #2e3546 0%, #111823 52%, #070b12 100%);
+  box-shadow: inset 0 -10px 18px rgba(0, 0, 0, 0.48);
+  color: #eef4ff;
+}
+
+.piano-key--black span {
+  bottom: 14px;
+}
+
+.piano-key.is-target {
+  box-shadow: inset 0 0 0 3px rgba(255, 205, 118, 0.82), 0 0 18px rgba(255, 205, 118, 0.3);
+}
+
+.piano-key.is-upcoming:not(.is-target) {
+  box-shadow: inset 0 0 0 3px rgba(113, 224, 210, 0.48);
+}
+
+.piano-key.is-pressed {
+  transform: translateY(4px);
+}
+
+.piano-key--white.is-pressed {
+  background: linear-gradient(180deg, #ffde9d 0%, #f4bf68 74%, #c7812c 100%);
+}
+
+.piano-key--black.is-pressed {
+  background: linear-gradient(180deg, #7fe6d8 0%, #3aa7a6 58%, #1c5f66 100%);
+}
+
+.coach-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.coach-card {
+  padding: 18px;
+}
+
+.accent-amber::before,
+.accent-teal::before,
+.accent-rose::before,
+.accent-slate::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 3px;
+}
+
+.accent-amber::before {
+  background: linear-gradient(90deg, #e2b16f, transparent 60%);
+}
+
+.accent-teal::before {
+  background: linear-gradient(90deg, #46c4bd, transparent 60%);
+}
+
+.accent-rose::before {
+  background: linear-gradient(90deg, #ff8f8f, transparent 60%);
+}
+
+.accent-slate::before {
+  background: linear-gradient(90deg, #94a0b5, transparent 60%);
+}
+
+.input-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #dce6f6;
+}
+
+@media (max-width: 1340px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .exercise-panel,
+  .coach-panel {
+    order: 2;
+  }
+
+  .stage-panel {
+    order: 1;
+  }
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    padding: 18px;
+  }
+
+  .hero-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .expected-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .keyboard {
+    height: 190px;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-panel,
+  .exercise-panel,
+  .stage-panel,
+  .coach-panel {
+    padding: 18px;
+  }
+
+  .hero-panel h1 {
+    font-size: 2.4rem;
+  }
+
+  .piano-roll {
+    min-height: 340px;
+  }
+
+  .keyboard {
+    overflow-x: auto;
+  }
+}
