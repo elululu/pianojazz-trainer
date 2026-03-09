@@ -2,6 +2,7 @@ import { startTransition, useEffect, useRef, useState } from 'react'
 import { exercises } from './data/exercises'
 import { modeChallenges } from './data/modeChallenges'
 import { useMidi, type MidiNoteEvent } from './hooks/useMidi'
+import type { Exercise, ExerciseLessonKind, ExerciseTrack } from './types'
 import {
   KEYBOARD_LAYOUT,
   getChordSuggestions,
@@ -104,6 +105,32 @@ const getBeatOffsetToStep = (steps: Array<{ beatSpan: number }>, currentIndex: n
 
 const getCumulativeBeatOffset = (steps: Array<{ beatSpan: number }>, endIndex: number) => {
   return steps.slice(0, endIndex).reduce((total, step) => total + step.beatSpan, 0)
+}
+
+const compareExercises = (left: Exercise, right: Exercise) => {
+  return left.phaseOrder - right.phaseOrder || left.order - right.order || getModuleOrder(left.module) - getModuleOrder(right.module)
+}
+
+const getLessonKindLabel = (lessonKind: ExerciseLessonKind) => {
+  switch (lessonKind) {
+    case 'standard':
+      return 'Standard'
+    case 'mini-piece':
+      return 'Mini-piece'
+    default:
+      return 'Concept'
+  }
+}
+
+const getTrackLabel = (track: ExerciseTrack) => {
+  switch (track) {
+    case 'comping':
+      return 'Comping'
+    case 'two-hands':
+      return 'Deux mains'
+    default:
+      return 'Impro'
+  }
 }
 
 const getMasteryState = (noteOnCount: number, completedRuns: number, accuracy: number, mistakes: number) => {
@@ -226,7 +253,7 @@ const getLeftHandFingerMap = (voicing: number[]) => {
 export default function App() {
   const [practiceSurface, setPracticeSurface] = useState<PracticeSurface>('courses')
   const [courseWorkspaceMode, setCourseWorkspaceMode] = useState<CourseWorkspaceMode>('browser')
-  const [selectedExerciseId, setSelectedExerciseId] = useState(exercises[0].id)
+  const [selectedExerciseId, setSelectedExerciseId] = useState(() => [...exercises].sort(compareExercises)[0]?.id ?? exercises[0].id)
   const [selectedChallengeId, setSelectedChallengeId] = useState(modeChallenges[0].id)
   const [improvLabMode, setImprovLabMode] = useState<ImprovLabMode>('modal-training')
   const [lessonMode, setLessonMode] = useState<LessonMode>('guided')
@@ -263,6 +290,8 @@ export default function App() {
   const isAdvancingRef = useRef(false)
   const [stableChordLabel, setStableChordLabel] = useState<string | null>(null)
 
+  const orderedExercises = [...exercises].sort(compareExercises)
+  const exerciseLookup = new Map(orderedExercises.map((exercise) => [exercise.id, exercise]))
   const selectedExercise = exercises.find((exercise) => exercise.id === selectedExerciseId) ?? exercises[0]
   const selectedChallenge = modeChallenges.find((challenge) => challenge.id === selectedChallengeId) ?? modeChallenges[0]
   const savedModuleProgress = progressStore[selectedExerciseId]
@@ -424,14 +453,31 @@ export default function App() {
     : isFreeHarmonyMode
       ? 'Laboratoire harmonique libre'
       : 'Laboratoire modal'
-  const activeCourseStepLabel = `Etape ${String(getModuleOrder(selectedExercise.module)).padStart(2, '0')}`
-  const courseLanes = (['intermediaire', 'avance'] as const).map((difficulty) => ({
-    difficulty,
-    label: difficulty === 'intermediaire' ? 'Intermediaire' : 'Avance',
-    courses: exercises
-      .filter((exercise) => exercise.difficulty === difficulty)
-      .sort((left, right) => getModuleOrder(left.module) - getModuleOrder(right.module)),
-  }))
+  const activeCourseStepLabel = `${selectedExercise.phase} · Etape ${String(selectedExercise.order).padStart(2, '0')}`
+  const isExerciseUnlocked = (exercise: Exercise) => {
+    return (exercise.prerequisiteIds ?? []).every((exerciseId) => (progressStore[exerciseId]?.masteryRank ?? 0) >= 1)
+  }
+  const coursePhases = orderedExercises.reduce<Array<{ phase: string, phaseOrder: number, courses: Exercise[] }>>((groups, exercise) => {
+    const existingGroup = groups[groups.length - 1]
+
+    if (!existingGroup || existingGroup.phase !== exercise.phase) {
+      groups.push({ phase: exercise.phase, phaseOrder: exercise.phaseOrder, courses: [exercise] })
+      return groups
+    }
+
+    existingGroup.courses.push(exercise)
+    return groups
+  }, [])
+  const unlockedExercises = orderedExercises.filter((exercise) => isExerciseUnlocked(exercise))
+  const nextRecommendedExercise = orderedExercises.find((exercise) => {
+    return isExerciseUnlocked(exercise) && (progressStore[exercise.id]?.masteryRank ?? 0) < 2
+  }) ?? unlockedExercises[0] ?? orderedExercises[0]
+  const selectedCompanionExercises = (selectedExercise.companionExerciseIds ?? [])
+    .map((exerciseId) => exerciseLookup.get(exerciseId))
+    .filter((exercise): exercise is Exercise => Boolean(exercise))
+  const selectedPrerequisiteExercises = (selectedExercise.prerequisiteIds ?? [])
+    .map((exerciseId) => exerciseLookup.get(exerciseId))
+    .filter((exercise): exercise is Exercise => Boolean(exercise))
 
   const clearPressedState = () => {
     activeNoteSourcesRef.current = new Map<number, Set<string>>()
@@ -1070,10 +1116,19 @@ export default function App() {
           <section className="panel browser-hero">
             <div>
               <p className="section-kicker">Choisir un parcours</p>
-              <h2>Entre par le bon niveau, puis bascule sur un ecran piano dedie.</h2>
+              <h2>Travaille le jazz par phases: concept, application, puis jeu plus reel.</h2>
               <p className="lesson-mission">
-                Chaque etape t envoie ensuite dans une vue de pratique epuree: cible, clavier, progression, puis seulement le minimum d infos utiles.
+                Chaque phase melange comping, improvisation et standards. Tu peux suivre la recommendation du moment ou ouvrir une etape compagne pour lier harmonie et phrase.
               </p>
+              {nextRecommendedExercise ? (
+                <div className="browser-hero-callout">
+                  <span className="status-label">A jouer maintenant</span>
+                  <strong>{nextRecommendedExercise.title}</strong>
+                  <small>
+                    {getLessonKindLabel(nextRecommendedExercise.lessonKind)} · {getTrackLabel(nextRecommendedExercise.primaryTrack)}
+                  </small>
+                </div>
+              ) : null}
             </div>
 
             <div className="browser-hero-stats">
@@ -1093,37 +1148,57 @@ export default function App() {
           </section>
 
           <section className="browser-lanes">
-            {courseLanes.map((lane) => (
-              <article key={lane.difficulty} className="panel browser-lane">
+            {coursePhases.map((phase) => {
+              const stabilizedInPhase = phase.courses.filter((exercise) => (progressStore[exercise.id]?.masteryRank ?? 0) >= 2).length
+
+              return (
+              <article key={phase.phase} className="panel browser-lane browser-phase-card">
                 <div className="section-head section-head-tight">
                   <div>
-                    <p className="section-kicker">Niveau</p>
-                    <h2>{lane.label}</h2>
+                    <p className="section-kicker">Phase {String(phase.phaseOrder).padStart(2, '0')}</p>
+                    <h2>{phase.phase}</h2>
                   </div>
-                  <span className="pill">{lane.courses.length} etapes</span>
+                  <span className="pill">{stabilizedInPhase} / {phase.courses.length} stabilisees</span>
+                </div>
+
+                <div className="phase-summary">
+                  <span className="exercise-support">Alterne concepts, standards et etudes pour faire le lien entre vocabulaire et vrai jeu.</span>
                 </div>
 
                 <div className="browser-step-list">
-                  {lane.courses.map((exercise) => {
+                  {phase.courses.map((exercise) => {
                     const savedProgress = progressStore[exercise.id]
+                    const isLocked = !isExerciseUnlocked(exercise)
+                    const companionTitles = (exercise.companionExerciseIds ?? [])
+                      .map((exerciseId) => exerciseLookup.get(exerciseId)?.title)
+                      .filter(Boolean)
+                      .join(' · ')
+                    const prerequisiteTitles = (exercise.prerequisiteIds ?? [])
+                      .map((exerciseId) => exerciseLookup.get(exerciseId)?.title)
+                      .filter(Boolean)
+                      .join(' · ')
 
                     return (
                       <button
                         key={exercise.id}
                         type="button"
-                        className={`browser-step-card ${exercise.id === selectedExerciseId ? 'is-selected' : ''}`}
+                        className={`browser-step-card ${exercise.id === selectedExerciseId ? 'is-selected' : ''} ${isLocked ? 'is-locked' : ''} ${exercise.id === nextRecommendedExercise?.id ? 'is-recommended' : ''}`}
+                        disabled={isLocked}
                         onClick={() => {
                           setSelectedExerciseId(exercise.id)
                           setCourseWorkspaceMode('practice')
                         }}
                       >
                         <div className="browser-step-head">
-                          <span className="exercise-card-index">{String(getModuleOrder(exercise.module)).padStart(2, '0')}</span>
+                          <span className="exercise-card-index">{String(exercise.order).padStart(2, '0')}</span>
                           <div className="exercise-card-copy">
                             <div className="inline-pills">
-                              <span className="tag">{exercise.module}</span>
+                              <span className="tag">{getLessonKindLabel(exercise.lessonKind)}</span>
+                              <span className="tag">{getTrackLabel(exercise.primaryTrack)}</span>
                               <span className="tempo">{exercise.tempo} BPM</span>
+                              {exercise.standardTitle ? <span className="tag">{exercise.standardTitle}</span> : null}
                             </div>
+                            <span className="exercise-support">{exercise.module}</span>
                             <strong>{exercise.title}</strong>
                           </div>
                         </div>
@@ -1132,9 +1207,16 @@ export default function App() {
                           <span className="exercise-focus">{exercise.handFocus}</span>
                           <span className="exercise-focus">{exercise.rangeLabel}</span>
                           <span className="exercise-focus">{exercise.category}</span>
+                          <span className="exercise-focus">{exercise.feel ?? 'straight'}</span>
                         </div>
+                        {prerequisiteTitles ? (
+                          <p className="exercise-support">Prerequis: {prerequisiteTitles}</p>
+                        ) : null}
+                        {companionTitles ? (
+                          <p className="exercise-support">Cours compagnon: {companionTitles}</p>
+                        ) : null}
                         <div className="exercise-card-progress">
-                          <span>{savedProgress?.masteryLabel ?? 'Pret a decouvrir'}</span>
+                          <span>{isLocked ? 'A debloquer' : savedProgress?.masteryLabel ?? 'Pret a decouvrir'}</span>
                           <span>{exercise.masteryGoal}</span>
                         </div>
                       </button>
@@ -1142,7 +1224,7 @@ export default function App() {
                   })}
                 </div>
               </article>
-            ))}
+            )})}
           </section>
         </main>
       ) : isCoursePractice ? (
@@ -1160,9 +1242,33 @@ export default function App() {
               </div>
 
               <div className="practice-header-side">
+                <span className="pill">{getLessonKindLabel(selectedExercise.lessonKind)}</span>
+                <span className="pill">{getTrackLabel(selectedExercise.primaryTrack)}</span>
                 <span className="pill">{selectedExercise.handFocus}</span>
                 <span className="pill">{selectedExercise.difficulty}</span>
                 <span className="pill">{adaptiveTempo} BPM</span>
+              </div>
+            </div>
+
+            <div className="parcours-context-grid">
+              <div className="parcours-context-card">
+                <span className="status-label">Position dans le parcours</span>
+                <strong>{selectedExercise.phase}</strong>
+                <small>{selectedExercise.module}</small>
+              </div>
+              <div className="parcours-context-card">
+                <span className="status-label">Application</span>
+                <strong>{selectedExercise.standardTitle ?? 'Travail de concept'}</strong>
+                <small>{selectedExercise.standardSection ?? selectedExercise.nextUnlock}</small>
+              </div>
+              <div className="parcours-context-card">
+                <span className="status-label">Cours compagnons</span>
+                <strong>{selectedCompanionExercises.length > 0 ? selectedCompanionExercises.map((exercise) => exercise.title).join(' · ') : 'Aucun pour l instant'}</strong>
+                <small>
+                  {selectedPrerequisiteExercises.length > 0
+                    ? `Prerequis: ${selectedPrerequisiteExercises.map((exercise) => exercise.title).join(' · ')}`
+                    : 'Aucun prerequis bloque ce module.'}
+                </small>
               </div>
             </div>
 

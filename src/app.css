@@ -167,6 +167,25 @@ h2 {
   line-height: 1;
 }
 
+.browser-hero-callout {
+  display: grid;
+  gap: 4px;
+  max-width: 320px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(74, 183, 180, 0.1);
+  border: 1px solid rgba(74, 183, 180, 0.18);
+}
+
+.browser-hero-callout strong {
+  color: #ecfbf8;
+}
+
+.browser-hero-callout small {
+  color: #9cded5;
+}
+
 .browser-hero-stats {
   display: grid;
   gap: 12px;
@@ -180,6 +199,18 @@ h2 {
 
 .browser-lane {
   padding: 24px;
+}
+
+.browser-phase-card {
+  display: grid;
+  gap: 16px;
+}
+
+.phase-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .browser-step-list {
@@ -204,9 +235,23 @@ h2 {
   border-color: rgba(226, 177, 111, 0.4);
 }
 
+.browser-step-card:disabled {
+  cursor: not-allowed;
+}
+
 .browser-step-card.is-selected {
   background: linear-gradient(180deg, rgba(226, 177, 111, 0.16), rgba(18, 24, 35, 0.8));
   border-color: rgba(226, 177, 111, 0.4);
+}
+
+.browser-step-card.is-recommended {
+  box-shadow: 0 18px 40px rgba(74, 183, 180, 0.12);
+  border-color: rgba(74, 183, 180, 0.34);
+}
+
+.browser-step-card.is-locked {
+  opacity: 0.62;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .browser-step-head,
@@ -258,6 +303,31 @@ h2 {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.parcours-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.parcours-context-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.parcours-context-card strong {
+  color: #eef4ff;
+}
+
+.parcours-context-card small {
+  color: #9ba6ba;
+  line-height: 1.45;
 }
 
 .practice-command-bar {
@@ -1338,6 +1408,7 @@ h2 {
 
   .hero-status--compact,
   .browser-hero-stats,
+  .parcours-context-grid,
   .practice-command-bar,
   .dual-keyboard-grid--wide {
     grid-template-columns: 1fr;

@@ -1,7 +1,13 @@
-export type ExerciseCategory = 'gammes' | 'ii-v-i' | 'arpèges' | 'impro'
-export type ExerciseDifficulty = 'intermediaire' | 'avance'
+export type ExerciseCategory = 'gammes' | 'ii-v-i' | 'arpèges' | 'impro' | 'standards' | 'voicings'
+export type ExerciseDifficulty = 'debutant' | 'intermediaire' | 'avance'
 export type HandFocus = 'main droite' | 'main gauche' | 'mains ensemble'
 export type JazzChordFamily = 'major' | 'minor' | 'dominant' | 'suspended' | 'altered' | 'half-diminished'
+export type ExerciseLessonKind = 'concept' | 'standard' | 'mini-piece'
+export type ExerciseTrack = 'comping' | 'improv' | 'two-hands'
+export type ExerciseStandardSection = 'vamp' | 'a' | 'b' | 'bridge' | 'turnaround' | 'cadence'
+export type RhythmFeel = 'straight' | 'swing'
+export type StepHand = 'left' | 'right' | 'both'
+export type StepMatchMode = 'exact' | 'contains'
 
 export type ExerciseStep = {
   id: string
@@ -10,11 +16,20 @@ export type ExerciseStep = {
   tips: string
   beatSpan: number
   chord?: string
+  hand?: StepHand
+  matchMode?: StepMatchMode
+  durationBeats?: number
+  offsetBeats?: number
 }
 
 export type Exercise = {
   id: string
   title: string
+  phase: string
+  phaseOrder: number
+  order: number
+  lessonKind: ExerciseLessonKind
+  primaryTrack: ExerciseTrack
   category: ExerciseCategory
   difficulty: ExerciseDifficulty
   handFocus: HandFocus
@@ -32,6 +47,15 @@ export type Exercise = {
   practiceLoop: string[]
   checkpoints: string[]
   nextUnlock: string
+  tags: string[]
+  secondaryTracks?: ExerciseTrack[]
+  prerequisiteIds?: string[]
+  companionExerciseIds?: string[]
+  standardId?: string
+  standardTitle?: string
+  standardSection?: ExerciseStandardSection
+  splitNote?: number
+  feel?: RhythmFeel
   steps: ExerciseStep[]
 }
 
