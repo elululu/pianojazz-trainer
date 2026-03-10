@@ -275,6 +275,10 @@ h2 {
   gap: 24px;
 }
 
+.practice-shell--wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .stage-panel--focus {
   padding: 22px;
 }
@@ -335,9 +339,14 @@ h2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 16px;
+  align-items: stretch;
 }
 
 .play-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 150px;
   padding: 18px 20px;
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.04);
@@ -346,6 +355,8 @@ h2 {
 
 .play-card strong {
   display: block;
+  min-height: 3.25em;
+  overflow: hidden;
   color: #fff6e8;
   font-size: clamp(1.1rem, 1.8vw, 1.5rem);
   line-height: 1.06;
@@ -354,8 +365,11 @@ h2 {
 .play-card small {
   display: block;
   margin-top: 10px;
+  min-height: 2.8em;
+  overflow: hidden;
   color: #c3ccda;
   font-size: 0.92rem;
+  line-height: 1.4;
 }
 
 .play-card--target {
@@ -415,8 +429,71 @@ h2 {
 
 .lab-toolbar {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 16px;
+}
+
+.lab-toolbar--polished {
+  gap: 8px;
+}
+
+.lab-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+
+.lab-hero-actions {
+  justify-content: flex-end;
+}
+
+.lab-selector-panel {
+  display: grid;
+  gap: 8px;
+  padding-block: 2px;
+}
+
+.lab-inline-section {
+  display: grid;
+  gap: 6px;
+}
+
+.lab-inline-section--narrow {
+  max-width: 340px;
+}
+
+.lab-inline-section--wide {
+  min-width: 0;
+}
+
+.lab-inline-label {
+  color: #7f8ba1;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.practice-switch--compact {
+  margin-bottom: 0;
+}
+
+.lesson-actions--compact {
+  align-items: center;
+}
+
+.selector-strip--grouped {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+.selector-strip--grouped .selector-chip {
+  background: rgba(16, 22, 36, 0.36);
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .selector-strip {
@@ -428,18 +505,41 @@ h2 {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 999px;
   color: #dce6f6;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   white-space: nowrap;
+  font-size: 0.88rem;
 }
 
 .selector-chip.is-active {
   color: #fff4de;
   background: linear-gradient(180deg, rgba(226, 177, 111, 0.18), rgba(255, 255, 255, 0.04));
   border-color: rgba(226, 177, 111, 0.38);
+  box-shadow: 0 2px 8px rgba(226, 177, 111, 0.08);
+}
+
+.lab-summary-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 4px 0 2px;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+}
+
+.lab-summary-card--compact strong,
+.lab-summary-card--compact span {
+  color: #94a0b5;
+  font-size: 0.82rem;
+}
+
+.lab-summary-card--compact strong {
+  color: #fff4de;
 }
 
 .history-strip {
@@ -456,6 +556,34 @@ h2 {
   margin: 0;
   color: #9eabbf;
   font-size: 0.92rem;
+}
+
+.lab-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.lab-insight-card {
+  display: grid;
+  gap: 6px;
+  min-height: 122px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lab-insight-card strong {
+  color: #fff4de;
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.lab-insight-card small {
+  color: #9eabbf;
+  line-height: 1.45;
 }
 
 .note-badge {
@@ -480,6 +608,10 @@ h2 {
 
 .dual-keyboard-grid--wide {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dual-keyboard-grid--continuous {
+  gap: 10px;
 }
 
 .improv-mode-map--compact {
@@ -891,6 +1023,17 @@ h2 {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.keyboard-hint-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.keyboard-hint-copy {
+  min-width: 0;
+}
+
 .keyboard-hint strong {
   display: block;
   color: #fff1d8;
@@ -904,6 +1047,41 @@ h2 {
 .keyboard-hint--left-hand {
   background: linear-gradient(180deg, rgba(226, 177, 111, 0.14), rgba(255, 255, 255, 0.04));
   border-color: rgba(226, 177, 111, 0.24);
+}
+
+.keyboard-hint--right-hand {
+  background: linear-gradient(180deg, rgba(74, 183, 180, 0.14), rgba(255, 255, 255, 0.04));
+  border-color: rgba(74, 183, 180, 0.24);
+}
+
+.keyboard-range-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.keyboard-range-controls--compact {
+  justify-items: end;
+  flex-shrink: 0;
+}
+
+.keyboard-range-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.keyboard-range-button {
+  min-width: 44px;
+  padding: 7px 11px;
+  font-size: 0.78rem;
+}
+
+.keyboard-range-label {
+  color: #94a0b5;
+  font-size: 0.82rem;
+  min-width: 92px;
+  text-align: center;
 }
 
 .saved-stats {
@@ -1175,6 +1353,16 @@ h2 {
   border-color: rgba(226, 177, 111, 0.18);
 }
 
+.keyboard-frame--split-left {
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+.keyboard-frame--split-right {
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+}
+
 .expected-bar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1291,7 +1479,27 @@ h2 {
 }
 
 .piano-key.is-upcoming:not(.is-target) {
-  box-shadow: inset 0 0 0 3px rgba(160, 224, 255, 0.7);
+  animation: upcomingPulse 980ms ease-in-out infinite;
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 5px rgba(112, 220, 255, 1),
+    inset 0 -18px 0 rgba(72, 186, 255, 0.24),
+    0 0 28px rgba(78, 190, 255, 0.68);
+}
+
+.piano-key--white.is-upcoming:not(.is-target):not(.is-pressed) {
+  background: linear-gradient(180deg, #ffffff 0%, #dff4ff 46%, #83d5ff 78%, #36a9ea 100%);
+  color: #0d3552;
+}
+
+.piano-key--black.is-upcoming:not(.is-target):not(.is-pressed) {
+  background: linear-gradient(180deg, #b7ecff 0%, #4cbcff 34%, #167db6 68%, #0c3857 100%);
+  color: #eefbff;
+}
+
+.piano-key.is-upcoming:not(.is-target) .piano-key-label {
+  font-weight: 800;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.42);
 }
 
 .piano-key.is-alerted {
@@ -1318,6 +1526,27 @@ h2 {
 
   50% {
     box-shadow: inset 0 0 0 3px rgba(255, 143, 143, 1), 0 0 24px rgba(255, 143, 143, 0.38);
+  }
+
+  100% {
+    box-shadow: inset 0 0 0 3px rgba(255, 143, 143, 0.2), 0 0 0 rgba(255, 143, 143, 0);
+  }
+}
+
+@keyframes upcomingPulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 5px rgba(112, 220, 255, 0.96),
+      inset 0 -18px 0 rgba(72, 186, 255, 0.18),
+      0 0 18px rgba(78, 190, 255, 0.34);
+  }
+
+  50% {
+    box-shadow:
+      inset 0 0 0 5px rgba(148, 232, 255, 1),
+      inset 0 -20px 0 rgba(72, 186, 255, 0.32),
+      0 0 30px rgba(78, 190, 255, 0.78);
   }
 
   100% {
@@ -1420,6 +1649,7 @@ h2 {
 
   .hero-status--compact,
   .browser-hero-stats,
+  .lab-insight-grid,
   .parcours-context-grid,
   .practice-command-bar,
   .dual-keyboard-grid--wide {
@@ -1454,6 +1684,14 @@ h2 {
   .practice-header,
   .browser-hero {
     display: grid;
+  }
+
+  .lab-topline {
+    align-items: stretch;
+  }
+
+  .lab-hero-actions {
+    justify-content: flex-start;
   }
 
   .practice-header-side {
@@ -1499,6 +1737,10 @@ h2 {
   .browser-lane,
   .side-dock {
     padding: 18px;
+  }
+
+  .lab-insight-card {
+    min-height: auto;
   }
 
   .hero-panel h1 {

@@ -2,6 +2,8 @@
   "name": "pianojazz-trainer",
   "private": true,
   "version": "0.1.0",
+  "description": "Modern jazz piano training app focused on pocket, color, motif, rhythm, and performance texture.",
+  "author": "Lucien Oulhen",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {

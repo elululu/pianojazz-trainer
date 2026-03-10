@@ -2,7 +2,21 @@ import { startTransition, useEffect, useRef, useState } from 'react'
 import { modernExercises as exercises } from './data/modernExercises'
 import { modeChallenges } from './data/modeChallenges'
 import { useMidi, type MidiNoteEvent } from './hooks/useMidi'
-import type { Exercise, ExerciseEvent, ExerciseLessonKind, ExerciseStandardSection, ExerciseStep, ExerciseTrack, StepMatchMode } from './types'
+import type {
+  ArtistSceneFamily,
+  Exercise,
+  ExerciseEvent,
+  ExerciseLessonKind,
+  ExerciseStandardSection,
+  ExerciseStep,
+  ExerciseTrack,
+  GuidedChordRecipeId,
+  ModeGeneratedColor,
+  ModeGuidedProgression,
+  ModeRhythmGuide,
+  ModeRhythmSubdivision,
+  StepMatchMode,
+} from './types'
 import {
   createKeyboardLayout,
   KEYBOARD_LAYOUT,
@@ -34,14 +48,25 @@ const IMPRO_STREAK_TARGET = 8
 const WRONG_NOTE_FLASH_MS = 260
 const ALERT_NOTE_COOLDOWN_MS = 140
 const PROGRESS_STORAGE_KEY = 'pianojazz-progress-v1'
+const LAB_PREFERENCES_STORAGE_KEY = 'pianojazz-lab-preferences-v1'
 const FREE_HARMONY_LAB_ID = 'free-harmony-lab'
 const FREE_HARMONY_SPLIT_NOTE = 60
+const LEFT_HAND_MIN_START = 24
+const LEFT_HAND_DEFAULT_WINDOW = 24
+const RIGHT_HAND_DEFAULT_WINDOW = 25
+const KEYBOARD_WINDOW_MIN = 18
+const KEYBOARD_WINDOW_MAX = 36
+const KEYBOARD_WINDOW_STEP = 6
+const ARTIST_FILTER_ALL = 'Tous'
 
 type PracticeSurface = 'courses' | 'improv-lab'
 type CourseWorkspaceMode = 'browser' | 'practice'
 type LessonMode = 'guided' | 'call-response'
 type CallResponseState = 'idle' | 'playing' | 'waiting' | 'success'
 type ImprovLabMode = 'modal-training' | 'free-harmony'
+type GuidedProgressionSource = 'written' | 'generated'
+type LeftHandDensityMode = 'shell' | 'dense'
+type ArtistFilterValue = typeof ARTIST_FILTER_ALL | ArtistSceneFamily
 
 type PracticeProgress = {
   bestAccuracy: number
@@ -51,9 +76,111 @@ type PracticeProgress = {
   tempoBonus: number
   lastMode: string
   lastPracticedAt: string
+  bestStreak?: number
+  bestVoicingHits?: number
+  bestGrooveScore?: number
+  lastVariationTitle?: string
+  lastArtistFamily?: ArtistSceneFamily
 }
 
 type ProgressStore = Record<string, PracticeProgress>
+
+type LabPreferences = {
+  selectedArtistFamily: ArtistFilterValue
+  guidedAutoAdvance: boolean
+  leftHandDensityMode: LeftHandDensityMode
+  improvLeftHandStart: number
+  improvLeftHandWindow: number
+  improvRightHandStart: number
+  improvRightHandWindow: number
+}
+
+const GUIDED_CHORD_RECIPES: Record<GuidedChordRecipeId, {
+  suffix: string
+  leftIntervals: number[]
+  rightIntervals: number[]
+}> = {
+  minor9Add11: {
+    suffix: 'm9 add11',
+    leftIntervals: [0, 12],
+    rightIntervals: [14, 17, 19, 24],
+  },
+  sus13: {
+    suffix: '13sus',
+    leftIntervals: [0, 10],
+    rightIntervals: [14, 17, 21, 24],
+  },
+  major9: {
+    suffix: 'maj9',
+    leftIntervals: [0, 11],
+    rightIntervals: [14, 16, 19, 23],
+  },
+  major9Sharp11: {
+    suffix: 'maj9#11',
+    leftIntervals: [0, 11],
+    rightIntervals: [14, 18, 19, 23],
+  },
+  neoSoulMinor11: {
+    suffix: 'neo m11',
+    leftIntervals: [0, 7],
+    rightIntervals: [15, 19, 22, 26],
+  },
+  glasperMajor9Sharp11: {
+    suffix: 'halo maj9#11',
+    leftIntervals: [0, 7],
+    rightIntervals: [11, 14, 18, 21],
+  },
+  fkjSus13: {
+    suffix: 'fkj sus13',
+    leftIntervals: [0, 7],
+    rightIntervals: [10, 14, 17, 21],
+  },
+  clusterMinorMaj9: {
+    suffix: 'cluster mMaj9',
+    leftIntervals: [0, 11],
+    rightIntervals: [14, 15, 19, 23],
+  },
+  fusionDominantSharp11: {
+    suffix: 'fusion 7#11',
+    leftIntervals: [0, 10],
+    rightIntervals: [16, 18, 21, 26],
+  },
+  minor11: {
+    suffix: 'm11',
+    leftIntervals: [0, 10],
+    rightIntervals: [15, 17, 19, 24],
+  },
+  minorMaj9: {
+    suffix: 'mMaj9',
+    leftIntervals: [0, 11],
+    rightIntervals: [15, 16, 19, 23],
+  },
+  altDominant: {
+    suffix: '7alt',
+    leftIntervals: [0, 10],
+    rightIntervals: [13, 16, 20, 25],
+  },
+  dominantSharp11: {
+    suffix: '7#11',
+    leftIntervals: [0, 10],
+    rightIntervals: [16, 18, 21, 24],
+  },
+  halfDiminished11: {
+    suffix: 'm11b5',
+    leftIntervals: [0, 10],
+    rightIntervals: [14, 17, 18, 21],
+  },
+  pedalMinor11: {
+    suffix: 'pedal m11',
+    leftIntervals: [0, 12],
+    rightIntervals: [15, 17, 19, 24],
+  },
+  pedalMajor9Sharp11: {
+    suffix: 'pedal maj9#11',
+    leftIntervals: [0, 12],
+    rightIntervals: [14, 18, 19, 23],
+  },
+}
 
 const sortedNotes = (notes: Iterable<number>) => {
   return [...notes].sort((left, right) => left - right)
@@ -87,6 +214,25 @@ const getLoopedStep = <T,>(items: T[], index: number) => {
   const normalizedIndex = ((index % items.length) + items.length) % items.length
 
   return items[normalizedIndex]
+}
+
+const buildGeneratedProgression = (generatedColor: ModeGeneratedColor): ModeGuidedProgression => {
+  return {
+    id: generatedColor.id,
+    title: generatedColor.title,
+    description: generatedColor.description,
+    steps: generatedColor.steps.map((step) => {
+      const recipe = GUIDED_CHORD_RECIPES[step.recipeId]
+
+      return {
+        id: step.id,
+        label: `${step.rootName}${recipe.suffix}`,
+        leftHandVoicing: recipe.leftIntervals.map((interval) => step.rootMidi + interval),
+        rightHandVoicing: recipe.rightIntervals.map((interval) => step.rootMidi + interval),
+        cue: step.cue,
+      }
+    }),
+  }
 }
 
 const noteSetMatches = (pressedNotes: Set<number>, expectedNotes: number[]) => {
@@ -300,6 +446,162 @@ const getPromptIndices = (stepCount: number, startIndex: number) => {
   return Array.from({ length: promptLength }, (_, index) => (startIndex + index) % stepCount)
 }
 
+const average = (values: number[]) => {
+  if (values.length === 0) {
+    return 0
+  }
+
+  return values.reduce((total, value) => total + value, 0) / values.length
+}
+
+const median = (values: number[]) => {
+  if (values.length === 0) {
+    return 0
+  }
+
+  const ordered = [...values].sort((left, right) => left - right)
+  const middleIndex = Math.floor(ordered.length / 2)
+
+  if (ordered.length % 2 === 0) {
+    return (ordered[middleIndex - 1] + ordered[middleIndex]) / 2
+  }
+
+  return ordered[middleIndex]
+}
+
+const standardDeviation = (values: number[]) => {
+  if (values.length <= 1) {
+    return 0
+  }
+
+  const mean = average(values)
+  const variance = average(values.map((value) => (value - mean) ** 2))
+
+  return Math.sqrt(variance)
+}
+
+const getSubdivisionMultiplier = (subdivision: ModeRhythmSubdivision) => {
+  switch (subdivision) {
+    case 'sixteenths':
+      return 0.25
+    case 'triplets':
+      return 1 / 3
+    case 'eighths':
+      return 0.5
+    default:
+      return 1
+  }
+}
+
+const getSubdivisionLabel = (subdivision: ModeRhythmSubdivision) => {
+  switch (subdivision) {
+    case 'sixteenths':
+      return '16e'
+    case 'triplets':
+      return 'triolet'
+    case 'eighths':
+      return 'croches'
+    default:
+      return 'temps'
+  }
+}
+
+const getGrooveAssessment = (noteTimestamps: number[], rhythmGuide: ModeRhythmGuide) => {
+  const intervals = noteTimestamps.slice(1).map((timestamp, index) => timestamp - noteTimestamps[index])
+
+  if (intervals.length < 2) {
+    return {
+      label: 'Pulse a poser',
+      detail: `${rhythmGuide.countPattern} · ${rhythmGuide.placementHint}`,
+      score: 0,
+    }
+  }
+
+  const beatMs = 60000 / rhythmGuide.pulseBpm
+  const targetInterval = beatMs * getSubdivisionMultiplier(rhythmGuide.subdivision)
+  const medianInterval = median(intervals)
+  const distance = Math.abs(medianInterval - targetInterval) / targetInterval
+  const spread = standardDeviation(intervals) / Math.max(medianInterval, 1)
+  const score = Math.max(0, Math.round(100 - distance * 70 - spread * 80))
+
+  if (score >= 78) {
+    return {
+      label: 'Pocket solide',
+      detail: `${getSubdivisionLabel(rhythmGuide.subdivision)} lisibles autour de ${rhythmGuide.pulseBpm} BPM. ${rhythmGuide.pocketHint}`,
+      score,
+    }
+  }
+
+  if (score >= 52) {
+    return {
+      label: 'Pulse lisible',
+      detail: `Le debit est proche du cadre. Resserre encore ${rhythmGuide.countPattern.toLowerCase()}.`,
+      score,
+    }
+  }
+
+  return {
+    label: 'Placement flottant',
+    detail: `${rhythmGuide.placementHint} Reviens a ${rhythmGuide.countPattern.toLowerCase()}.`,
+    score,
+  }
+}
+
+const getDensityAssessment = (noteCount: number, minPhraseNotes: number, maxPhraseNotes: number) => {
+  if (noteCount === 0) {
+    return 'Phrase vide pour l instant'
+  }
+
+  if (noteCount < minPhraseNotes) {
+    return 'Encore un peu court: ajoute juste une petite reponse.'
+  }
+
+  if (noteCount > maxPhraseNotes) {
+    return 'Phrase un peu dense: coupe avant la derniere idee.'
+  }
+
+  return 'Densite juste: la phrase garde de l air.'
+}
+
+const getColorAssessment = (notes: number[], focusPitchClasses: number[]) => {
+  if (notes.length === 0) {
+    return 'Couleur encore muette.'
+  }
+
+  const matchedFocus = new Set(notes.map((note) => note % 12).filter((pitchClass) => focusPitchClasses.includes(pitchClass))).size
+
+  if (matchedFocus >= 2) {
+    return 'Couleur bien visee: les notes-signature sont la.'
+  }
+
+  if (matchedFocus === 1) {
+    return 'Une note-signature est la: renforce-la dans la phrase.'
+  }
+
+  return 'Bonne matiere, mais la couleur-cle n est pas encore assez nette.'
+}
+
+const getVoiceLeadingAssessment = (previousVoicing: number[], currentVoicing: number[]) => {
+  if (previousVoicing.length === 0 || currentVoicing.length === 0) {
+    return 'Le prochain accord dira la conduite.'
+  }
+
+  const commonTones = currentVoicing.filter((note) => previousVoicing.includes(note)).length
+  const averageMotion = average(currentVoicing.map((note) => {
+    return Math.min(...previousVoicing.map((previousNote) => Math.abs(previousNote - note)))
+  }))
+
+  if (commonTones >= 2 || averageMotion <= 2.5) {
+    return 'Conduite fluide: garde cette logique de glissement.'
+  }
+
+  if (averageMotion <= 5) {
+    return 'Conduite correcte: tu peux encore lisser le passage.'
+  }
+
+  return 'Saut assez large: cherche une voix commune ou un demi-ton de plus.'
+}
+
 const readSavedProgress = () => {
   try {
     const rawValue = window.localStorage.getItem(PROGRESS_STORAGE_KEY)
@@ -311,6 +613,33 @@ const readSavedProgress = () => {
     return JSON.parse(rawValue) as ProgressStore
   } catch {
     return {}
+  }
+}
+
+const readSavedLabPreferences = (): LabPreferences => {
+  const defaults: LabPreferences = {
+    selectedArtistFamily: ARTIST_FILTER_ALL,
+    guidedAutoAdvance: true,
+    leftHandDensityMode: 'shell',
+    improvLeftHandStart: 36,
+    improvLeftHandWindow: LEFT_HAND_DEFAULT_WINDOW,
+    improvRightHandStart: FREE_HARMONY_SPLIT_NOTE,
+    improvRightHandWindow: RIGHT_HAND_DEFAULT_WINDOW,
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(LAB_PREFERENCES_STORAGE_KEY)
+
+    if (!rawValue) {
+      return defaults
+    }
+
+    return {
+      ...defaults,
+      ...(JSON.parse(rawValue) as Partial<LabPreferences>),
+    }
+  } catch {
+    return defaults
   }
 }
 
@@ -345,6 +674,48 @@ const getLeftHandFingerMap = (voicing: number[]) => {
   return new Map(orderedVoicing.map((note, index) => [note, fingers[index] ?? 1]))
 }
 
+const fitNoteIntoLeftHandRange = (note: number, splitNote: number) => {
+  let fittedNote = note
+
+  while (fittedNote >= splitNote) {
+    fittedNote -= 12
+  }
+
+  while (fittedNote < LEFT_HAND_MIN_START) {
+    fittedNote += 12
+  }
+
+  return fittedNote
+}
+
+const buildDenseLeftHandVoicing = (baseVoicing: number[], rightHandVoicing: number[], splitNote: number) => {
+  const orderedBase = sortedNotes(baseVoicing)
+
+  if (orderedBase.length === 0) {
+    return []
+  }
+
+  const shiftedRightHand = rightHandVoicing
+    .map((note) => fitNoteIntoLeftHandRange(note, splitNote))
+    .filter((note) => note < splitNote)
+    .sort((left, right) => left - right)
+
+  const extraNotes = shiftedRightHand.filter((note) => {
+    return !orderedBase.includes(note) && !orderedBase.some((baseNote) => Math.abs(baseNote - note) <= 1)
+  })
+
+  const targetSize = orderedBase.length <= 2 ? 3 : 4
+  const denseVoicing = [...orderedBase]
+
+  extraNotes.forEach((note) => {
+    if (denseVoicing.length < targetSize) {
+      denseVoicing.push(note)
+    }
+  })
+
+  return sortedNotes(denseVoicing)
+}
+
 export default function App() {
   const [practiceSurface, setPracticeSurface] = useState<PracticeSurface>('courses')
   const [courseWorkspaceMode, setCourseWorkspaceMode] = useState<CourseWorkspaceMode>('browser')
@@ -373,6 +744,21 @@ export default function App() {
   const [improvStreak, setImprovStreak] = useState(0)
   const [improvFeedbackLabel, setImprovFeedbackLabel] = useState('Choisis un mode puis improvise main droite.')
   const [improvAlertNote, setImprovAlertNote] = useState<number | null>(null)
+  const [selectedArtistFamily, setSelectedArtistFamily] = useState<ArtistFilterValue>(() => readSavedLabPreferences().selectedArtistFamily)
+  const [guidedChordStepIndex, setGuidedChordStepIndex] = useState(0)
+  const [guidedProgressionSource, setGuidedProgressionSource] = useState<GuidedProgressionSource>('written')
+  const [selectedGuidedProgressionId, setSelectedGuidedProgressionId] = useState(modeChallenges[0].guidedProgressions[0]?.id ?? '')
+  const [selectedGeneratedColorId, setSelectedGeneratedColorId] = useState(modeChallenges[0].generatedColors[0]?.id ?? '')
+  const [guidedAutoAdvance, setGuidedAutoAdvance] = useState(() => readSavedLabPreferences().guidedAutoAdvance)
+  const [guidedVoicingHits, setGuidedVoicingHits] = useState(0)
+  const [leftHandDensityMode, setLeftHandDensityMode] = useState<LeftHandDensityMode>(() => readSavedLabPreferences().leftHandDensityMode)
+  const [improvLeftHandStart, setImprovLeftHandStart] = useState(() => readSavedLabPreferences().improvLeftHandStart)
+  const [improvLeftHandWindow, setImprovLeftHandWindow] = useState(() => readSavedLabPreferences().improvLeftHandWindow)
+  const [improvRightHandStart, setImprovRightHandStart] = useState(() => readSavedLabPreferences().improvRightHandStart)
+  const [improvRightHandWindow, setImprovRightHandWindow] = useState(() => readSavedLabPreferences().improvRightHandWindow)
+  const [showUpcomingNotes, setShowUpcomingNotes] = useState(true)
+  const [improvNoteTimestamps, setImprovNoteTimestamps] = useState<number[]>([])
+  const [improvBestStreak, setImprovBestStreak] = useState(0)
   const pressedNotesRef = useRef(new Set<number>())
   const activeNoteSourcesRef = useRef(new Map<number, Set<string>>())
   const pointerHeldNotesRef = useRef(new Set<number>())
@@ -380,16 +766,27 @@ export default function App() {
   const advanceTimeoutRef = useRef<number | null>(null)
   const promptTimeoutsRef = useRef<number[]>([])
   const alertTimeoutRef = useRef<number | null>(null)
+  const guidedAdvanceTimeoutRef = useRef<number | null>(null)
   const lastAlertAtRef = useRef(0)
   const audioContextRef = useRef<AudioContext | null>(null)
   const demoNotesRef = useRef(new Set<number>())
   const isAdvancingRef = useRef(false)
+  const completedGuidedStepRef = useRef<string | null>(null)
   const [stableChordLabel, setStableChordLabel] = useState<string | null>(null)
 
   const orderedExercises = [...exercises].sort(compareExercises)
   const exerciseLookup = new Map(orderedExercises.map((exercise) => [exercise.id, exercise]))
   const selectedExercise = exercises.find((exercise) => exercise.id === selectedExerciseId) ?? exercises[0]
-  const selectedChallenge = modeChallenges.find((challenge) => challenge.id === selectedChallengeId) ?? modeChallenges[0]
+  const artistFamilies = [
+    ARTIST_FILTER_ALL,
+    ...Array.from(new Set(modeChallenges.flatMap((challenge) => challenge.artistFamilies))),
+  ] as ArtistFilterValue[]
+  const filteredChallenges = selectedArtistFamily === ARTIST_FILTER_ALL
+    ? modeChallenges
+    : modeChallenges.filter((challenge) => challenge.artistFamilies.includes(selectedArtistFamily))
+  const selectedChallenge = filteredChallenges.find((challenge) => challenge.id === selectedChallengeId)
+    ?? filteredChallenges[0]
+    ?? modeChallenges[0]
   const savedModuleProgress = progressStore[selectedExerciseId]
   const isCourseBrowser = practiceSurface === 'courses' && courseWorkspaceMode === 'browser'
   const isCoursePractice = practiceSurface === 'courses' && courseWorkspaceMode === 'practice'
@@ -405,16 +802,39 @@ export default function App() {
   const improvTargetColor = isFreeHarmonyMode
     ? 'Vise une cellule claire de 3 a 6 notes: je traduis ensuite cette couleur en voicing jazz main gauche.'
     : selectedChallenge.targetColor
-  const improvAllowedNotesLabel = isFreeHarmonyMode ? 'Toutes les notes' : selectedChallenge.noteNames.join(' · ')
-  const improvKeyboardHint = isFreeHarmonyMode
-    ? `Main droite au-dessus de ${toNoteName(improvSplitNote)} · analyse harmonique libre sans alerte de gamme`
-    : `Main droite au-dessus de ${toNoteName(improvSplitNote)} · alerte sonore si note hors mode`
   const defaultImprovFeedbackLabel = isFreeHarmonyMode
     ? `Mode libre actif: joue une phrase main droite au-dessus de ${toNoteName(improvSplitNote)} pour recevoir un accord jazz main gauche.`
-    : `Mode actif: ${selectedChallenge.modeName}. Improvise main droite au-dessus de ${toNoteName(selectedChallenge.splitNote)}.`
+    : `Scene guidee active: ${selectedChallenge.modeName}. Improvise main droite au-dessus de ${toNoteName(selectedChallenge.splitNote)}.`
   const improvChordOptions = isFreeHarmonyMode
     ? getFreeHarmonyChordOptions(improvSplitNote)
     : selectedChallenge.chordOptions
+  const selectedWrittenProgression = selectedChallenge.guidedProgressions.find((progression) => progression.id === selectedGuidedProgressionId)
+    ?? selectedChallenge.guidedProgressions[0]
+  const selectedGeneratedColor = selectedChallenge.generatedColors.find((color) => color.id === selectedGeneratedColorId)
+    ?? selectedChallenge.generatedColors[0]
+  const hasWrittenProgressions = selectedChallenge.guidedProgressions.length > 0
+  const hasGeneratedColors = selectedChallenge.generatedColors.length > 0
+  const effectiveGuidedSource = hasWrittenProgressions
+    ? guidedProgressionSource
+    : hasGeneratedColors
+      ? 'generated'
+      : 'written'
+  const generatedGuidedProgression = selectedGeneratedColor ? buildGeneratedProgression(selectedGeneratedColor) : undefined
+  const guidedProgression = isFreeHarmonyMode
+    ? null
+    : effectiveGuidedSource === 'generated'
+      ? generatedGuidedProgression ?? selectedWrittenProgression ?? null
+      : selectedWrittenProgression ?? generatedGuidedProgression ?? null
+  const guidedProgressionSteps = guidedProgression?.steps ?? []
+  const activeGuidedStep = guidedProgressionSteps.length > 0
+    ? guidedProgressionSteps[guidedChordStepIndex % guidedProgressionSteps.length]
+    : undefined
+  const previousGuidedStep = guidedProgressionSteps.length > 0
+    ? guidedProgressionSteps[(guidedChordStepIndex - 1 + guidedProgressionSteps.length) % guidedProgressionSteps.length]
+    : undefined
+  const nextGuidedStep = guidedProgressionSteps.length > 0
+    ? guidedProgressionSteps[(guidedChordStepIndex + 1) % guidedProgressionSteps.length]
+    : undefined
   const savedImprovProgress = progressStore[isFreeHarmonyMode ? FREE_HARMONY_LAB_ID : selectedChallengeId]
 
   const accuracy = noteOnCount === 0 ? 100 : Math.max(0, Math.round(((noteOnCount - mistakes) / noteOnCount) * 100))
@@ -528,16 +948,104 @@ export default function App() {
   const freeHarmonyAlternatives = isFreeHarmonyMode
     ? improvChordSuggestionCandidates.filter((option) => option.label !== activeChordSuggestion.label).slice(0, 3)
     : []
-  const normalizedLeftHandVoicing = normalizeVoicingBelowSplit(activeChordSuggestion.leftHandVoicing, improvSplitNote)
-  const leftHandFingerMap = getLeftHandFingerMap(normalizedLeftHandVoicing)
+  const suggestedLeftHandVoicing = normalizeVoicingBelowSplit(activeChordSuggestion.leftHandVoicing, improvSplitNote)
+  const baseGuidedLeftHandVoicing = isFreeHarmonyMode
+    ? suggestedLeftHandVoicing
+    : activeGuidedStep?.leftHandVoicing ?? suggestedLeftHandVoicing
+  const guidedRightHandVoicing = isFreeHarmonyMode ? [] : activeGuidedStep?.rightHandVoicing ?? []
+  const guidedLeftHandVoicing = leftHandDensityMode === 'dense' && !isFreeHarmonyMode
+    ? buildDenseLeftHandVoicing(baseGuidedLeftHandVoicing, guidedRightHandVoicing, improvSplitNote)
+    : baseGuidedLeftHandVoicing
+  const leftHandFingerMap = getLeftHandFingerMap(guidedLeftHandVoicing)
   const improvRightHandPressedNotes = pressedNotes.filter((note) => note >= improvSplitNote)
   const improvLeftHandPressedNotes = pressedNotes.filter((note) => note < improvSplitNote)
-  const improvLeftHandLayout = createKeyboardLayout(36, Math.max(36, improvSplitNote - 1))
-  const improvRightHandLayout = createKeyboardLayout(improvSplitNote, TRAINING_RANGE.end)
-  const chordVoicingLabel = toNoteNames(normalizedLeftHandVoicing).join(' · ')
+  const clampedLeftHandWindow = Math.max(KEYBOARD_WINDOW_MIN, Math.min(improvLeftHandWindow, KEYBOARD_WINDOW_MAX))
+  const leftHandMaxStart = Math.max(LEFT_HAND_MIN_START, improvSplitNote - clampedLeftHandWindow)
+  const clampedImprovLeftHandStart = Math.max(LEFT_HAND_MIN_START, Math.min(improvLeftHandStart, leftHandMaxStart))
+  const improvLeftHandEnd = Math.min(improvSplitNote - 1, clampedImprovLeftHandStart + clampedLeftHandWindow - 1)
+  const improvLeftHandLayout = createKeyboardLayout(clampedImprovLeftHandStart, improvLeftHandEnd)
+  const clampedRightHandWindow = Math.max(KEYBOARD_WINDOW_MIN, Math.min(improvRightHandWindow, KEYBOARD_WINDOW_MAX))
+  const rightHandMinStart = improvSplitNote
+  const rightHandMaxStart = Math.max(rightHandMinStart, TRAINING_RANGE.end - clampedRightHandWindow + 1)
+  const clampedImprovRightHandStart = Math.max(rightHandMinStart, Math.min(improvRightHandStart, rightHandMaxStart))
+  const improvRightHandEnd = Math.min(TRAINING_RANGE.end, clampedImprovRightHandStart + clampedRightHandWindow - 1)
+  const improvRightHandLayout = createKeyboardLayout(clampedImprovRightHandStart, improvRightHandEnd)
+  const canShiftLeftHandLower = clampedImprovLeftHandStart > LEFT_HAND_MIN_START
+  const canShiftLeftHandHigher = clampedImprovLeftHandStart < leftHandMaxStart
+  const canShowMoreLeftHandNotes = clampedLeftHandWindow < KEYBOARD_WINDOW_MAX
+  const canShowFewerLeftHandNotes = clampedLeftHandWindow > KEYBOARD_WINDOW_MIN
+  const canShiftRightHandLower = clampedImprovRightHandStart > rightHandMinStart
+  const canShiftRightHandHigher = clampedImprovRightHandStart < rightHandMaxStart
+  const canShowMoreRightHandNotes = clampedRightHandWindow < KEYBOARD_WINDOW_MAX
+  const canShowFewerRightHandNotes = clampedRightHandWindow > KEYBOARD_WINDOW_MIN
+  const improvLeftHandRangeLabel = `${toNoteName(clampedImprovLeftHandStart)} → ${toNoteName(improvLeftHandEnd)}`
+  const improvRightHandRangeLabel = `${toNoteName(clampedImprovRightHandStart)} → ${toNoteName(improvRightHandEnd)}`
+  const chordVoicingLabel = toNoteNames(guidedLeftHandVoicing).join(' · ')
+  const guidedRightHandLabel = guidedRightHandVoicing.length > 0 ? toNoteNames(guidedRightHandVoicing).join(' · ') : 'En attente'
+  const guidedLeftHandMatched = !isFreeHarmonyMode
+    && guidedLeftHandVoicing.length > 0
+    && guidedLeftHandVoicing.every((note) => improvLeftHandPressedNotes.includes(note))
+  const guidedRightHandMatched = !isFreeHarmonyMode
+    && guidedRightHandVoicing.length > 0
+    && guidedRightHandVoicing.every((note) => improvRightHandPressedNotes.includes(note))
+  const guidedStepMatched = !isFreeHarmonyMode
+    && (guidedLeftHandVoicing.length === 0 || guidedLeftHandMatched)
+    && (guidedRightHandVoicing.length === 0 || guidedRightHandMatched)
+  const guidedMatchSummary = isFreeHarmonyMode
+    ? ''
+    : guidedStepMatched
+      ? 'Voicing complet valide'
+      : guidedRightHandMatched && !guidedLeftHandMatched
+        ? 'Main droite valide · ajoute la main gauche'
+        : guidedLeftHandMatched && !guidedRightHandMatched
+          ? 'Main gauche posee · ajoute la main droite'
+          : 'Vise les deux blocs pour verrouiller l accord'
+  const guidedProgressionSummary = activeGuidedStep
+    ? `${activeGuidedStep.label}${nextGuidedStep ? ` → ${nextGuidedStep.label}` : ''}`
+    : selectedChallenge.modeName
+  const guidedProgressionMeta = isFreeHarmonyMode
+    ? null
+    : effectiveGuidedSource === 'generated'
+      ? selectedGeneratedColor
+      : guidedProgression
   const matchedPitchClassLabel = activeChordSuggestion.matchedPitchClasses.length > 0
     ? activeChordSuggestion.matchedPitchClasses.map((pitchClass) => toPitchClassName(pitchClass)).join(' · ')
     : 'Joue une courte phrase main droite pour recevoir une lecture harmonique.'
+  const activeRhythmGuide = isFreeHarmonyMode
+    ? {
+        pulseBpm: 88,
+        subdivision: 'eighths' as const,
+        countPattern: '1 + · 2 + · laisse respirer',
+        placementHint: 'Garde une petite cellule claire et laisse-la vivre avant la suivante.',
+        pocketHint: 'Le mode libre gagne quand la phrase reste courte et bien placee.',
+      }
+    : selectedChallenge.rhythmGuide
+  const activePracticeProfile = isFreeHarmonyMode
+    ? { minPhraseNotes: 3, maxPhraseNotes: 6, focusPitchClasses: activeChordSuggestion.matchedPitchClasses }
+    : selectedChallenge.practiceProfile
+  const grooveAssessment = getGrooveAssessment(improvNoteTimestamps, activeRhythmGuide)
+  const densityAssessment = getDensityAssessment(improvRightHandHistory.length, activePracticeProfile.minPhraseNotes, activePracticeProfile.maxPhraseNotes)
+  const colorAssessment = isFreeHarmonyMode
+    ? improvRightHandHistory.length === 0
+      ? 'Joue une petite phrase pour stabiliser une lecture harmonique.'
+      : `Lecture couleur: ${matchedPitchClassLabel}. Garde la meme cellule une fois de plus pour verrouiller le son.`
+    : getColorAssessment(improvRightHandHistory, activePracticeProfile.focusPitchClasses)
+  const previousCombinedVoicing = previousGuidedStep
+    ? [...previousGuidedStep.leftHandVoicing, ...previousGuidedStep.rightHandVoicing]
+    : []
+  const currentCombinedVoicing = activeGuidedStep
+    ? [...guidedLeftHandVoicing, ...guidedRightHandVoicing]
+    : []
+  const voiceLeadingAssessment = isFreeHarmonyMode
+    ? 'Mode libre: privilegie surtout une couleur simple et stable.'
+    : getVoiceLeadingAssessment(previousCombinedVoicing, currentCombinedVoicing)
+  const progressionArtistLabel = guidedProgressionMeta?.artistTag ?? selectedChallenge.artistFamilies[0]
+  const progressionFormLabel = guidedProgressionMeta?.formLabel ?? `${guidedProgressionSteps.length} accords`
+  const progressionEnergyLabel = guidedProgressionMeta?.energyLabel ?? selectedChallenge.grooveLabel
+  const masteredScenesCount = modeChallenges.filter((challenge) => (progressStore[challenge.id]?.masteryRank ?? 0) >= 2).length
+  const lastScenePracticeLabel = savedImprovProgress?.lastPracticedAt
+    ? new Date(savedImprovProgress.lastPracticedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+    : 'jamais'
 
   const activePracticeKey = practiceSurface === 'courses'
     ? selectedExerciseId
@@ -556,7 +1064,7 @@ export default function App() {
       : 'Session guidee'
     : isFreeHarmonyMode
       ? 'Color Lab libre'
-      : 'Color Lab modal'
+      : 'Color Lab guide'
   const activeCourseStepLabel = `${selectedExercise.phase} · Etape ${String(selectedExercise.order).padStart(2, '0')}`
   const isExerciseUnlocked = (exercise: Exercise) => {
     return (exercise.prerequisiteIds ?? []).every((exerciseId) => (progressStore[exerciseId]?.masteryRank ?? 0) >= 1)
@@ -653,12 +1161,20 @@ export default function App() {
 
   const resetImprovSession = () => {
     clearAlertFlash()
+    if (guidedAdvanceTimeoutRef.current !== null) {
+      window.clearTimeout(guidedAdvanceTimeoutRef.current)
+      guidedAdvanceTimeoutRef.current = null
+    }
+    completedGuidedStepRef.current = null
     clearPressedState()
     setImprovRightHandHistory([])
+    setImprovNoteTimestamps([])
     setImprovValidNotes(0)
     setImprovWrongNotes(0)
     setImprovCleanPhrases(0)
     setImprovStreak(0)
+    setImprovBestStreak(0)
+    setGuidedVoicingHits(0)
     setImprovFeedbackLabel(defaultImprovFeedbackLabel)
   }
 
@@ -669,6 +1185,65 @@ export default function App() {
   useEffect(() => {
     resetImprovSession()
   }, [defaultImprovFeedbackLabel, selectedChallengeId, improvLabMode])
+
+  useEffect(() => {
+    if (filteredChallenges.length === 0) {
+      return
+    }
+
+    if (!filteredChallenges.some((challenge) => challenge.id === selectedChallengeId)) {
+      setSelectedChallengeId(filteredChallenges[0].id)
+    }
+  }, [filteredChallenges, selectedChallengeId])
+
+  useEffect(() => {
+    const nextWrittenProgressionId = selectedChallenge.guidedProgressions[0]?.id ?? ''
+    const nextGeneratedColorId = selectedChallenge.generatedColors[0]?.id ?? ''
+
+    setGuidedChordStepIndex(0)
+    setGuidedProgressionSource(selectedChallenge.guidedProgressions.length > 0 ? 'written' : 'generated')
+    setSelectedGuidedProgressionId(nextWrittenProgressionId)
+    setSelectedGeneratedColorId(nextGeneratedColorId)
+  }, [selectedChallengeId, improvLabMode])
+
+  useEffect(() => {
+    setGuidedChordStepIndex(0)
+  }, [guidedProgressionSource, selectedGuidedProgressionId, selectedGeneratedColorId])
+
+  useEffect(() => {
+    const nextPreferences: LabPreferences = {
+      selectedArtistFamily,
+      guidedAutoAdvance,
+      leftHandDensityMode,
+      improvLeftHandStart,
+      improvLeftHandWindow,
+      improvRightHandStart,
+      improvRightHandWindow,
+    }
+
+    window.localStorage.setItem(LAB_PREFERENCES_STORAGE_KEY, JSON.stringify(nextPreferences))
+  }, [
+    guidedAutoAdvance,
+    improvLeftHandStart,
+    improvLeftHandWindow,
+    improvRightHandStart,
+    improvRightHandWindow,
+    leftHandDensityMode,
+    selectedArtistFamily,
+  ])
+
+  useEffect(() => {
+    setImprovLeftHandStart((currentStart) => {
+      return Math.max(LEFT_HAND_MIN_START, Math.min(currentStart, Math.max(LEFT_HAND_MIN_START, improvSplitNote - clampedLeftHandWindow)))
+    })
+    setImprovRightHandStart((currentStart) => {
+      return Math.max(improvSplitNote, Math.min(currentStart, Math.max(improvSplitNote, TRAINING_RANGE.end - clampedRightHandWindow + 1)))
+    })
+  }, [clampedLeftHandWindow, clampedRightHandWindow, improvSplitNote])
+
+  useEffect(() => {
+    completedGuidedStepRef.current = null
+  }, [activeGuidedStep?.id, guidedProgression?.id])
 
   useEffect(() => {
     setStableChordLabel(null)
@@ -703,6 +1278,82 @@ export default function App() {
   }, [activeChordSuggestion.label, activeChordSuggestion.reason, defaultImprovFeedbackLabel, improvRightHandHistory, isFreeHarmonyMode, practiceSurface])
 
   useEffect(() => {
+    if (practiceSurface !== 'improv-lab' || isFreeHarmonyMode || !activeGuidedStep) {
+      return
+    }
+
+    if (guidedStepMatched) {
+      setImprovFeedbackLabel(
+        guidedAutoAdvance
+          ? `${activeGuidedStep.label} valide. Accord suivant dans la boucle.`
+          : `${activeGuidedStep.label} valide. Passe au suivant quand tu veux.`,
+      )
+      return
+    }
+
+    if (guidedRightHandMatched && !guidedLeftHandMatched) {
+      setImprovFeedbackLabel(`Main droite valide sur ${activeGuidedStep.label}. Ajoute maintenant ${chordVoicingLabel || 'la main gauche'}.`)
+      return
+    }
+
+    if (guidedLeftHandMatched && !guidedRightHandMatched) {
+      setImprovFeedbackLabel(`Main gauche posee sur ${activeGuidedStep.label}. Vise maintenant ${guidedRightHandLabel}.`)
+      return
+    }
+
+    if (improvRightHandHistory.length === 0 && improvLeftHandPressedNotes.length === 0) {
+      setImprovFeedbackLabel(defaultImprovFeedbackLabel)
+      return
+    }
+
+    setImprovFeedbackLabel(`Travaille ${activeGuidedStep.label} par couches: ${guidedRightHandLabel} puis ${chordVoicingLabel || 'main gauche'}.`)
+  }, [
+    activeGuidedStep,
+    chordVoicingLabel,
+    defaultImprovFeedbackLabel,
+    guidedAutoAdvance,
+    guidedLeftHandMatched,
+    guidedRightHandLabel,
+    guidedRightHandMatched,
+    guidedStepMatched,
+    improvLeftHandPressedNotes.length,
+    improvRightHandHistory.length,
+    isFreeHarmonyMode,
+    practiceSurface,
+  ])
+
+  useEffect(() => {
+    if (practiceSurface !== 'improv-lab' || isFreeHarmonyMode || !activeGuidedStep || !guidedStepMatched) {
+      if (!guidedStepMatched) {
+        completedGuidedStepRef.current = null
+      }
+      return
+    }
+
+    const completionKey = `${guidedProgression?.id ?? 'guided'}:${activeGuidedStep.id}`
+
+    if (completedGuidedStepRef.current === completionKey) {
+      return
+    }
+
+    completedGuidedStepRef.current = completionKey
+    setGuidedVoicingHits((value) => value + 1)
+
+    if (!guidedAutoAdvance || guidedProgressionSteps.length <= 1) {
+      return
+    }
+
+    if (guidedAdvanceTimeoutRef.current !== null) {
+      window.clearTimeout(guidedAdvanceTimeoutRef.current)
+    }
+
+    guidedAdvanceTimeoutRef.current = window.setTimeout(() => {
+      setGuidedChordStepIndex((value) => (value + 1) % guidedProgressionSteps.length)
+      guidedAdvanceTimeoutRef.current = null
+    }, 260)
+  }, [activeGuidedStep, guidedAutoAdvance, guidedProgression?.id, guidedProgressionSteps.length, guidedStepMatched, isFreeHarmonyMode, practiceSurface])
+
+  useEffect(() => {
     clearPromptPlayback()
     clearAlertFlash()
     clearPressedState()
@@ -713,7 +1364,7 @@ export default function App() {
     } else if (practiceSurface === 'courses') {
       setLastInputLabel('Mode cours actif')
     } else {
-      setLastInputLabel(isFreeHarmonyMode ? 'Color Lab libre actif' : 'Color Lab modal actif')
+      setLastInputLabel(isFreeHarmonyMode ? 'Color Lab libre actif' : 'Color Lab guide actif')
     }
   }, [courseWorkspaceMode, isCourseBrowser, isFreeHarmonyMode, practiceSurface])
 
@@ -764,6 +1415,11 @@ export default function App() {
         tempoBonus: Math.max(currentEntry?.tempoBonus ?? 0, activeTempoBonus),
         lastMode: activeModeLabel,
         lastPracticedAt: new Date().toISOString(),
+        bestStreak: Math.max(currentEntry?.bestStreak ?? 0, practiceSurface === 'improv-lab' ? improvBestStreak : 0),
+        bestVoicingHits: Math.max(currentEntry?.bestVoicingHits ?? 0, practiceSurface === 'improv-lab' ? guidedVoicingHits : 0),
+        bestGrooveScore: Math.max(currentEntry?.bestGrooveScore ?? 0, practiceSurface === 'improv-lab' ? grooveAssessment.score : 0),
+        lastVariationTitle: practiceSurface === 'improv-lab' ? guidedProgressionMeta?.title ?? undefined : currentEntry?.lastVariationTitle,
+        lastArtistFamily: practiceSurface === 'improv-lab' ? progressionArtistLabel : currentEntry?.lastArtistFamily,
       }
 
       const unchanged = currentEntry
@@ -773,6 +1429,11 @@ export default function App() {
         && currentEntry.masteryLabel === nextEntry.masteryLabel
         && currentEntry.tempoBonus === nextEntry.tempoBonus
         && currentEntry.lastMode === nextEntry.lastMode
+        && currentEntry.bestStreak === nextEntry.bestStreak
+        && currentEntry.bestVoicingHits === nextEntry.bestVoicingHits
+        && currentEntry.bestGrooveScore === nextEntry.bestGrooveScore
+        && currentEntry.lastVariationTitle === nextEntry.lastVariationTitle
+        && currentEntry.lastArtistFamily === nextEntry.lastArtistFamily
 
       if (unchanged) {
         return currentStore
@@ -783,7 +1444,22 @@ export default function App() {
         [activePracticeKey]: nextEntry,
       }
     })
-  }, [activeAccuracy, activeCompletedRuns, activeMasteryState.label, activeMasteryState.rank, activeModeLabel, activeNoteCount, activePracticeKey, activeTempoBonus])
+  }, [
+    activeAccuracy,
+    activeCompletedRuns,
+    activeMasteryState.label,
+    activeMasteryState.rank,
+    activeModeLabel,
+    activeNoteCount,
+    activePracticeKey,
+    activeTempoBonus,
+    grooveAssessment.score,
+    guidedProgressionMeta?.title,
+    guidedVoicingHits,
+    improvBestStreak,
+    practiceSurface,
+    progressionArtistLabel,
+  ])
 
   useEffect(() => {
     window.localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progressStore))
@@ -1024,12 +1700,16 @@ export default function App() {
       return
     }
 
+    setImprovNoteTimestamps((history) => [...history, Date.now()].slice(-8))
+
     if (isFreeHarmonyMode) {
       clearAlertFlash()
       setImprovValidNotes((value) => value + 1)
       setImprovRightHandHistory((history) => [...history, event.note].slice(-RIGHT_HAND_HISTORY_LIMIT))
       setImprovStreak((value) => {
         const nextValue = value + 1
+
+        setImprovBestStreak((currentBest) => Math.max(currentBest, nextValue))
 
         if (nextValue >= IMPRO_STREAK_TARGET) {
           setImprovCleanPhrases((count) => count + 1)
@@ -1046,7 +1726,7 @@ export default function App() {
     if (!inMode) {
       setImprovWrongNotes((value) => value + 1)
       setImprovStreak(0)
-      setImprovFeedbackLabel(`${toNoteName(event.note)} sort du mode ${selectedChallenge.modeName}. Reviens sur ${selectedChallenge.noteNames.join(' · ')}.`)
+      setImprovFeedbackLabel(`${toNoteName(event.note)} sort du cadre ${selectedChallenge.modeName}. Reviens sur ${selectedChallenge.noteNames.join(' · ')}.`)
       flashWrongNote(event.note)
       void playAlertTone()
       return
@@ -1057,6 +1737,8 @@ export default function App() {
     setImprovRightHandHistory((history) => [...history, event.note].slice(-RIGHT_HAND_HISTORY_LIMIT))
     setImprovStreak((value) => {
       const nextValue = value + 1
+
+      setImprovBestStreak((currentBest) => Math.max(currentBest, nextValue))
 
       if (nextValue >= IMPRO_STREAK_TARGET) {
         setImprovCleanPhrases((count) => count + 1)
@@ -1202,7 +1884,7 @@ export default function App() {
           <p className="eyebrow">PianoJazz Trainer</p>
           <h1>Joue d abord. Lis seulement ce qui aide le prochain geste.</h1>
           <p className="hero-copy">
-            Parcours modern jazz, scenes jouables, Color Lab modal et harmonique, et claviers penses pour le son, le geste et le groove.
+            Parcours modern jazz, scenes jouables, Color Lab guide et harmonique, et claviers penses pour le son, le geste et le groove.
           </p>
         </div>
 
@@ -1448,6 +2130,13 @@ export default function App() {
                 <button type="button" className="ghost-button" onClick={resetCourseSession}>
                   Reinitialiser
                 </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setShowUpcomingNotes((value) => !value)}
+                >
+                  {showUpcomingNotes ? 'Masquer les notes suivantes' : 'Afficher les notes suivantes'}
+                </button>
               </div>
             </div>
 
@@ -1546,7 +2235,7 @@ export default function App() {
                 {renderKeyboard({
                   activeNotes: courseDisplayedPressedNotes,
                   targetNotes: expectedNotes,
-                  upcomingNotes,
+                  upcomingNotes: showUpcomingNotes ? upcomingNotes : undefined,
                 })}
               </div>
 
@@ -1582,7 +2271,7 @@ export default function App() {
             <div className="practice-header">
               <div className="practice-header-main">
                 <div>
-                  <p className="section-kicker">{isFreeHarmonyMode ? 'Color Lab libre' : 'Color Lab modal'}</p>
+                  <p className="section-kicker">{isFreeHarmonyMode ? 'Color Lab libre' : 'Color Lab guide'}</p>
                   <h2>{improvTitle}</h2>
                 </div>
               </div>
@@ -1595,56 +2284,182 @@ export default function App() {
               </div>
             </div>
 
-            <div className="lab-toolbar">
-              <div className="practice-switch" role="tablist" aria-label="Sous-mode du laboratoire">
-                <button
-                  type="button"
-                  className={`mode-button ${improvLabMode === 'modal-training' ? 'is-active' : ''}`}
-                  onClick={() => setImprovLabMode('modal-training')}
-                >
-                  Mode guide
-                </button>
-                <button
-                  type="button"
-                  className={`mode-button ${improvLabMode === 'free-harmony' ? 'is-active' : ''}`}
-                  onClick={() => setImprovLabMode('free-harmony')}
-                >
-                  Mode libre harmonique
-                </button>
-              </div>
+            <div className="lab-toolbar lab-toolbar--polished">
+              <div className="lab-topline">
+                <div className="practice-switch practice-switch--compact" role="tablist" aria-label="Sous-mode du laboratoire">
+                  <button
+                    type="button"
+                    className={`mode-button ${improvLabMode === 'modal-training' ? 'is-active' : ''}`}
+                    onClick={() => setImprovLabMode('modal-training')}
+                  >
+                    Mode guide
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-button ${improvLabMode === 'free-harmony' ? 'is-active' : ''}`}
+                    onClick={() => setImprovLabMode('free-harmony')}
+                  >
+                    Mode libre harmonique
+                  </button>
+                </div>
 
-              <div className="lesson-actions">
-                <button type="button" className="ghost-button" onClick={resetImprovSession}>
-                  Reinitialiser
-                </button>
+                <div className="lesson-actions lesson-actions--compact lab-hero-actions">
+                  <button type="button" className="ghost-button" onClick={resetImprovSession}>
+                    Reinitialiser
+                  </button>
+                  {!isFreeHarmonyMode && (
+                    <button
+                      type="button"
+                      className={`ghost-button ${guidedAutoAdvance ? 'is-active' : ''}`}
+                      onClick={() => setGuidedAutoAdvance((value) => !value)}
+                    >
+                      Auto-chain {guidedAutoAdvance ? 'on' : 'off'}
+                    </button>
+                  )}
+                  {!isFreeHarmonyMode && (
+                    <div className="practice-switch practice-switch--compact" role="tablist" aria-label="Densite main gauche guidee">
+                      <button
+                        type="button"
+                        className={`mode-button ${leftHandDensityMode === 'shell' ? 'is-active' : ''}`}
+                        onClick={() => setLeftHandDensityMode('shell')}
+                      >
+                        MG shell
+                      </button>
+                      <button
+                        type="button"
+                        className={`mode-button ${leftHandDensityMode === 'dense' ? 'is-active' : ''}`}
+                        onClick={() => setLeftHandDensityMode('dense')}
+                      >
+                        MG dense
+                      </button>
+                    </div>
+                  )}
+                  {!isFreeHarmonyMode && guidedProgressionSteps.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => setGuidedChordStepIndex((value) => (value - 1 + guidedProgressionSteps.length) % guidedProgressionSteps.length)}
+                      >
+                        ← Accord
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => setGuidedChordStepIndex((value) => (value + 1) % guidedProgressionSteps.length)}
+                      >
+                        Accord →
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {!isFreeHarmonyMode && (
-                <div className="selector-strip" role="tablist" aria-label="Choix du mode modal">
-                  {modeChallenges.map((challenge) => (
-                    <button
-                      key={challenge.id}
-                      type="button"
-                      className={`selector-chip ${challenge.id === selectedChallengeId ? 'is-active' : ''}`}
-                      onClick={() => setSelectedChallengeId(challenge.id)}
-                    >
-                      {challenge.modeName}
-                    </button>
-                  ))}
-                </div>
+                <section className="lab-selector-panel">
+                  <div className="lab-inline-section">
+                    <span className="lab-inline-label">Famille</span>
+                    <div className="selector-strip selector-strip--grouped" role="tablist" aria-label="Filtre par famille artistique">
+                      {artistFamilies.map((family) => (
+                        <button
+                          key={family}
+                          type="button"
+                          className={`selector-chip ${family === selectedArtistFamily ? 'is-active' : ''}`}
+                          onClick={() => setSelectedArtistFamily(family)}
+                        >
+                          {family}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="lab-inline-section">
+                    <span className="lab-inline-label">Scene</span>
+                    <div className="selector-strip selector-strip--grouped" role="tablist" aria-label="Choix de la scene guidee">
+                      {filteredChallenges.map((challenge) => (
+                        <button
+                          key={challenge.id}
+                          type="button"
+                          className={`selector-chip ${challenge.id === selectedChallengeId ? 'is-active' : ''}`}
+                          onClick={() => setSelectedChallengeId(challenge.id)}
+                        >
+                          {challenge.modeName}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="lab-inline-section lab-inline-section--narrow">
+                    <span className="lab-inline-label">Source</span>
+                    <div className="selector-strip selector-strip--grouped" role="tablist" aria-label="Type d enchainement guide">
+                      {hasWrittenProgressions && (
+                        <button
+                          type="button"
+                          className={`selector-chip ${effectiveGuidedSource === 'written' ? 'is-active' : ''}`}
+                          onClick={() => setGuidedProgressionSource('written')}
+                        >
+                          Variantes ecrites
+                        </button>
+                      )}
+                      {hasGeneratedColors && (
+                        <button
+                          type="button"
+                          className={`selector-chip ${effectiveGuidedSource === 'generated' ? 'is-active' : ''}`}
+                          onClick={() => setGuidedProgressionSource('generated')}
+                        >
+                          Generateur couleur
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="lab-inline-section lab-inline-section--wide">
+                    <span className="lab-inline-label">Variation</span>
+                    <div className="selector-strip selector-strip--grouped" role="tablist" aria-label="Selection de variante guidee">
+                      {(effectiveGuidedSource === 'generated' ? selectedChallenge.generatedColors : selectedChallenge.guidedProgressions).map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className={`selector-chip ${(effectiveGuidedSource === 'generated' ? selectedGeneratedColorId : selectedGuidedProgressionId) === option.id ? 'is-active' : ''}`}
+                          onClick={() => {
+                            if (effectiveGuidedSource === 'generated') {
+                              setSelectedGeneratedColorId(option.id)
+                            } else {
+                              setSelectedGuidedProgressionId(option.id)
+                            }
+                          }}
+                        >
+                          {option.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
               )}
+
+              <section className="lab-summary-card lab-summary-card--compact">
+                <strong>{guidedProgressionMeta?.title ?? improvModeName}</strong>
+                <span>{guidedProgressionSteps.length} accords</span>
+                {!isFreeHarmonyMode && <span>{progressionArtistLabel}</span>}
+                {!isFreeHarmonyMode && <span>{progressionFormLabel}</span>}
+                {!isFreeHarmonyMode && <span>{progressionEnergyLabel}</span>}
+                <span>{leftHandDensityMode === 'dense' ? 'MG dense' : 'MG shell'}</span>
+                <span>{guidedAutoAdvance ? 'Auto-chain' : 'Manuel'}</span>
+                {!isFreeHarmonyMode && <span>{selectedChallenge.modeName}</span>}
+                {!isFreeHarmonyMode && <span>{masteredScenesCount} scenes stabilisees</span>}
+              </section>
             </div>
 
             <div className="practice-command-bar">
               <div className="play-card play-card--target">
                 <span className="expected-label">Lecture</span>
-                <strong>{isFreeHarmonyMode ? activeChordSuggestion.label : improvFeedbackLabel}</strong>
-                <small>{isFreeHarmonyMode ? (chordVoicingLabel || 'Joue une petite cellule') : improvTargetColor}</small>
+                <strong>{isFreeHarmonyMode ? activeChordSuggestion.label : activeGuidedStep?.label ?? improvFeedbackLabel}</strong>
+                <small>{isFreeHarmonyMode ? (chordVoicingLabel || 'Joue une petite cellule') : activeGuidedStep?.cue ?? guidedProgressionMeta?.description ?? improvTargetColor}</small>
               </div>
               <div className="play-card play-card--focus">
                 <span className="expected-label">Repere</span>
-                <strong>{isFreeHarmonyMode ? improvTargetColor : improvAllowedNotesLabel}</strong>
-                <small>{isFreeHarmonyMode ? matchedPitchClassLabel : improvKeyboardHint}</small>
+                <strong>{isFreeHarmonyMode ? improvTargetColor : guidedRightHandLabel}</strong>
+                <small>{isFreeHarmonyMode ? matchedPitchClassLabel : `${guidedProgressionMeta?.title ?? 'Enchainement'}: ${guidedProgressionSummary} · ${improvTargetColor}`}</small>
               </div>
             </div>
 
@@ -1653,8 +2468,15 @@ export default function App() {
                 ? [activeChordSuggestion, ...freeHarmonyAlternatives].map((option) => (
                     <span key={option.label} className="mode-note-chip">{option.label}</span>
                   ))
-                : selectedChallenge.noteNames.map((noteName) => (
-                    <span key={noteName} className="mode-note-chip">{noteName}</span>
+                : guidedProgressionSteps.map((step, index) => (
+                    <button
+                      key={step.id}
+                      type="button"
+                      className={`selector-chip ${index === guidedChordStepIndex ? 'is-active' : ''}`}
+                      onClick={() => setGuidedChordStepIndex(index)}
+                    >
+                      {step.label}
+                    </button>
                   ))}
             </div>
 
@@ -1667,18 +2489,94 @@ export default function App() {
                 ))}
                 {improvRightHandHistory.length === 0 && <span className="note-badge note-badge--muted">Aucune phrase</span>}
               </div>
+              {!isFreeHarmonyMode && (
+                <div className="note-badge-row">
+                  <span className={`note-badge ${guidedLeftHandMatched ? '' : 'note-badge--muted'}`}>MG {guidedLeftHandMatched ? 'ok' : 'a poser'}</span>
+                  <span className={`note-badge ${guidedRightHandMatched ? '' : 'note-badge--muted'}`}>MD {guidedRightHandMatched ? 'ok' : 'a poser'}</span>
+                  <span className={`note-badge ${guidedStepMatched ? '' : 'note-badge--muted'}`}>{guidedMatchSummary}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="lab-insight-grid">
+              <article className="lab-insight-card">
+                <span className="expected-label">ADN scene</span>
+                <strong>{isFreeHarmonyMode ? 'Libre harmonique moderne' : `${selectedChallenge.artistFamilies.join(' · ')}`}</strong>
+                <small>{isFreeHarmonyMode ? 'Construis une petite cellule, puis laisse l harmonie proposer un cadre.' : selectedChallenge.transferHint}</small>
+              </article>
+              <article className="lab-insight-card">
+                <span className="expected-label">Groove</span>
+                <strong>{grooveAssessment.label}</strong>
+                <small>{activeRhythmGuide.countPattern} · {grooveAssessment.detail}</small>
+              </article>
+              <article className="lab-insight-card">
+                <span className="expected-label">Feedback musical</span>
+                <strong>{densityAssessment}</strong>
+                <small>{colorAssessment} {!isFreeHarmonyMode ? voiceLeadingAssessment : ''}</small>
+              </article>
+              <article className="lab-insight-card">
+                <span className="expected-label">Memoire eleve</span>
+                <strong>{savedImprovProgress?.masteryLabel ?? 'A construire'}</strong>
+                <small>
+                  {savedImprovProgress?.bestStreak ?? 0} streak max · groove {savedImprovProgress?.bestGrooveScore ?? 0}% · vu {lastScenePracticeLabel}
+                </small>
+              </article>
             </div>
 
             <div className="keyboard-stage keyboard-stage--improv keyboard-stage--wide">
               <div className="dual-keyboard-grid dual-keyboard-grid--wide dual-keyboard-grid--continuous">
                 <div className="keyboard-stack-panel">
                   <div className="keyboard-hint keyboard-hint--subtle keyboard-hint--left-hand">
-                    <span className="expected-label">Main gauche</span>
-                    <strong>{activeChordSuggestion.label} · {chordVoicingLabel || 'en attente'}</strong>
+                    <div className="keyboard-hint-head">
+                      <div className="keyboard-hint-copy">
+                        <span className="expected-label">Main gauche</span>
+                        <strong>{isFreeHarmonyMode ? activeChordSuggestion.label : activeGuidedStep?.label} · {chordVoicingLabel || 'en attente'}</strong>
+                      </div>
+                      <div className="keyboard-range-controls keyboard-range-controls--compact">
+                        <div className="keyboard-range-group">
+                          <button
+                            type="button"
+                            className="ghost-button keyboard-range-button"
+                            onClick={() => setImprovLeftHandStart((value) => Math.max(LEFT_HAND_MIN_START, value - 1))}
+                            disabled={!canShiftLeftHandLower}
+                          >
+                            ←
+                          </button>
+                          <span className="keyboard-range-label">{improvLeftHandRangeLabel}</span>
+                          <button
+                            type="button"
+                            className="ghost-button keyboard-range-button"
+                            onClick={() => setImprovLeftHandStart((value) => Math.min(leftHandMaxStart, value + 1))}
+                            disabled={!canShiftLeftHandHigher}
+                          >
+                            →
+                          </button>
+                        </div>
+                        <div className="keyboard-range-group">
+                          <button
+                            type="button"
+                            className="ghost-button keyboard-range-button"
+                            onClick={() => setImprovLeftHandWindow((value) => Math.min(KEYBOARD_WINDOW_MAX, value + KEYBOARD_WINDOW_STEP))}
+                            disabled={!canShowMoreLeftHandNotes}
+                          >
+                            + notes
+                          </button>
+                          <span className="keyboard-range-label">{clampedLeftHandWindow} notes</span>
+                          <button
+                            type="button"
+                            className="ghost-button keyboard-range-button"
+                            onClick={() => setImprovLeftHandWindow((value) => Math.max(KEYBOARD_WINDOW_MIN, value - KEYBOARD_WINDOW_STEP))}
+                            disabled={!canShowFewerLeftHandNotes}
+                          >
+                            − notes
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   {renderKeyboard({
                     activeNotes: improvLeftHandPressedNotes,
-                    targetNotes: normalizedLeftHandVoicing,
+                    targetNotes: guidedLeftHandVoicing,
                     fingerNumbers: leftHandFingerMap,
                     frameClassName: 'keyboard-frame--left-hand keyboard-frame--split-left',
                     layout: improvLeftHandLayout,
@@ -1687,11 +2585,56 @@ export default function App() {
 
                 <div className="keyboard-stack-panel">
                   <div className="keyboard-hint keyboard-hint--subtle keyboard-hint--right-hand">
-                    <span className="expected-label">Main droite</span>
-                    <strong>{isFreeHarmonyMode ? 'Impro libre sans filtre modal' : `Impro dans ${selectedChallenge.modeName}`}</strong>
+                    <div className="keyboard-hint-head">
+                      <div className="keyboard-hint-copy">
+                        <span className="expected-label">Main droite</span>
+                        <strong>{isFreeHarmonyMode ? 'Impro libre sans filtre modal' : `${selectedChallenge.modeName} · accord guide`}</strong>
+                      </div>
+                      <div className="keyboard-range-controls keyboard-range-controls--compact">
+                        <div className="keyboard-range-group">
+                          <button
+                            type="button"
+                            className="ghost-button keyboard-range-button"
+                            onClick={() => setImprovRightHandStart((value) => Math.max(rightHandMinStart, value - 1))}
+                            disabled={!canShiftRightHandLower}
+                          >
+                            ←
+                          </button>
+                          <span className="keyboard-range-label">{improvRightHandRangeLabel}</span>
+                          <button
+                            type="button"
+                            className="ghost-button keyboard-range-button"
+                            onClick={() => setImprovRightHandStart((value) => Math.min(rightHandMaxStart, value + 1))}
+                            disabled={!canShiftRightHandHigher}
+                          >
+                            →
+                          </button>
+                        </div>
+                        <div className="keyboard-range-group">
+                          <button
+                            type="button"
+                            className="ghost-button keyboard-range-button"
+                            onClick={() => setImprovRightHandWindow((value) => Math.min(KEYBOARD_WINDOW_MAX, value + KEYBOARD_WINDOW_STEP))}
+                            disabled={!canShowMoreRightHandNotes}
+                          >
+                            + notes
+                          </button>
+                          <span className="keyboard-range-label">{clampedRightHandWindow} notes</span>
+                          <button
+                            type="button"
+                            className="ghost-button keyboard-range-button"
+                            onClick={() => setImprovRightHandWindow((value) => Math.max(KEYBOARD_WINDOW_MIN, value - KEYBOARD_WINDOW_STEP))}
+                            disabled={!canShowFewerRightHandNotes}
+                          >
+                            − notes
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   {renderKeyboard({
                     activeNotes: improvRightHandPressedNotes,
+                    targetNotes: guidedRightHandVoicing,
                     scalePitchClasses: isFreeHarmonyMode ? undefined : selectedChallenge.notePitchClasses,
                     alertNote: isFreeHarmonyMode ? null : improvAlertNote,
                     frameClassName: 'keyboard-frame--practice keyboard-frame--split-right',
@@ -1704,22 +2647,29 @@ export default function App() {
                 <article className="metric-card compact-stat">
                   <span>Streak</span>
                   <strong>{improvStreak}</strong>
-                  <small>objectif {IMPRO_STREAK_TARGET}</small>
+                  <small>best {Math.max(improvBestStreak, savedImprovProgress?.bestStreak ?? 0)} · objectif {IMPRO_STREAK_TARGET}</small>
                 </article>
                 <article className="metric-card compact-stat">
-                  <span>Precision</span>
-                  <strong>{improvAccuracy}%</strong>
-                  <small>{improvWrongNotes} alerte(s)</small>
+                  <span>Groove</span>
+                  <strong>{grooveAssessment.score}%</strong>
+                  <small>{grooveAssessment.label}</small>
                 </article>
                 <article className="metric-card compact-stat is-highlight">
                   <span>Etat</span>
                   <strong>{improvMasteryState.label}</strong>
-                  <small>{isFreeHarmonyMode ? activeChordSuggestion.functionLabel : improvFeedbackLabel}</small>
+                  <small>{isFreeHarmonyMode ? activeChordSuggestion.functionLabel : activeGuidedStep?.cue ?? improvFeedbackLabel}</small>
                 </article>
+                {!isFreeHarmonyMode && (
+                  <article className="metric-card compact-stat">
+                    <span>Voicings</span>
+                    <strong>{guidedVoicingHits}</strong>
+                    <small>best {savedImprovProgress?.bestVoicingHits ?? 0} · {guidedAutoAdvance ? 'auto-chain actif' : 'navigation manuelle'}</small>
+                  </article>
+                )}
                 <article className="metric-card compact-stat">
                   <span>Memoire</span>
                   <strong>{savedImprovProgress?.masteryLabel ?? 'A construire'}</strong>
-                  <small>{savedImprovProgress?.bestCompletedRuns ?? 0} phrases propres</small>
+                  <small>{savedImprovProgress?.lastVariationTitle ?? 'variation a construire'} · {savedImprovProgress?.lastArtistFamily ?? progressionArtistLabel}</small>
                 </article>
               </div>
             </div>

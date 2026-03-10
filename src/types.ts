@@ -8,6 +8,8 @@ export type ExerciseStandardSection = 'vamp' | 'loop' | 'scene' | 'capsule' | 'b
 export type RhythmFeel = 'straight' | 'swing'
 export type StepHand = 'left' | 'right' | 'both'
 export type StepMatchMode = 'exact' | 'contains'
+export type ArtistSceneFamily = 'Glasper' | 'Alfa Mist' | 'FKJ' | 'Yussef Dayes' | 'Hiromi/Fusion' | 'Cinematic'
+export type ModeRhythmSubdivision = 'quarters' | 'eighths' | 'triplets' | 'sixteenths'
 
 export type ExerciseEvent = {
   notes: number[]
@@ -80,6 +82,74 @@ export type JazzChordOption = {
   rootPitchClass?: number
 }
 
+export type ModeGuidedChordStep = {
+  id: string
+  label: string
+  leftHandVoicing: number[]
+  rightHandVoicing: number[]
+  cue: string
+}
+
+export type ModeGuidedProgression = {
+  id: string
+  title: string
+  description: string
+  artistTag?: ArtistSceneFamily
+  formLabel?: string
+  energyLabel?: string
+  steps: ModeGuidedChordStep[]
+}
+
+export type GuidedChordRecipeId =
+  | 'minor9Add11'
+  | 'sus13'
+  | 'major9'
+  | 'major9Sharp11'
+  | 'neoSoulMinor11'
+  | 'glasperMajor9Sharp11'
+  | 'fkjSus13'
+  | 'clusterMinorMaj9'
+  | 'fusionDominantSharp11'
+  | 'minor11'
+  | 'minorMaj9'
+  | 'altDominant'
+  | 'dominantSharp11'
+  | 'halfDiminished11'
+  | 'pedalMinor11'
+  | 'pedalMajor9Sharp11'
+
+export type ModeGeneratedColorStep = {
+  id: string
+  rootName: string
+  rootMidi: number
+  recipeId: GuidedChordRecipeId
+  cue: string
+}
+
+export type ModeGeneratedColor = {
+  id: string
+  title: string
+  description: string
+  artistTag?: ArtistSceneFamily
+  formLabel?: string
+  energyLabel?: string
+  steps: ModeGeneratedColorStep[]
+}
+
+export type ModeRhythmGuide = {
+  pulseBpm: number
+  subdivision: ModeRhythmSubdivision
+  countPattern: string
+  placementHint: string
+  pocketHint: string
+}
+
+export type ModePracticeProfile = {
+  minPhraseNotes: number
+  maxPhraseNotes: number
+  focusPitchClasses: number[]
+}
+
 export type ModeChallenge = {
   id: string
   title: string
@@ -93,5 +163,13 @@ export type ModeChallenge = {
   notePitchClasses: number[]
   noteNames: string[]
   splitNote: number
+  artistFamilies: ArtistSceneFamily[]
+  grooveLabel: string
+  grooveHint: string
+  transferHint: string
+  rhythmGuide: ModeRhythmGuide
+  practiceProfile: ModePracticeProfile
   chordOptions: JazzChordOption[]
+  guidedProgressions: ModeGuidedProgression[]
+  generatedColors: ModeGeneratedColor[]
 }
